@@ -7,7 +7,7 @@
 
 import { createSafeStorage } from '@/stores/storage-config';
 import { create } from 'zustand';
-import { devtools, persist } from 'zustand/middleware';
+import { persist } from 'zustand/middleware';
 import { messagesApi } from '../api';
 import { ERROR_MESSAGES } from '../constants';
 import type { MessagesState } from '../types';
@@ -175,8 +175,8 @@ export const useMessagesStore = create<MessagesState>()(
         }),
       }
     )
-  )
-);
+  );
+
 
 // ============================================
 // 选择器导出 (Selector Exports)

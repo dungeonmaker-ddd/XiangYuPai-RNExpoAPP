@@ -1,0 +1,92 @@
+﻿---
+alwaysApply: true
+---
+? ??? ???? PATH ??
+????? C9D0-4E5B
+D:\USERS\DUNGE\DOCUMENTS\GITHUB\XIANGYUPAI-RNEXPOAPP\SRC
++---components
+|   \---ui
++---features
+|   +---AuthModule
+|   |   +---api
+|   |   +---config
+|   |   +---hooks
+|   |   +---LoginMainPage
+|   |   |   \---components
+|   |   |       +---ActionButtonArea
+|   |   |       +---AgreementArea
+|   |   |       +---AuthInputArea
+|   |   |       +---AuxiliaryArea
+|   |   |       +---PhoneInputArea
+|   |   |       \---TopWelcomeArea
+|   |   +---SharedComponents
+|   |   |   \---Layout
+|   |   |       +---AuthKeyboardAvoid
+|   |   |       \---AuthSafeArea
+|   |   +---stores
+|   |   \---utils
+|   +---Discovery
+|   |   \---MainPage
+|   |       \---components
+|   |           +---ContentArea
+|   |           \---NavigationArea
+|   +---Homepage
+|   |   +---EventFlow
+|   |   |   \---EventCenterPage
+|   |   +---FeaturedFlow
+|   |   |   \---FeaturedPage
+|   |   +---FilterFlow
+|   |   |   \---FilterMainPage
+|   |   +---LocationFlow
+|   |   |   \---LocationMainPage
+|   |   +---MainPage
+|   |   |   +---components
+|   |   |   +---FilterTabsArea
+|   |   |   +---FunctionGridArea
+|   |   |   +---GameBannerArea
+|   |   |   +---HeaderArea
+|   |   |   +---LimitedOffersArea
+|   |   |   +---TeamPartyArea
+|   |   |   \---UserListArea
+|   |   |       \---UserCardComponent
+|   |   +---SearchFlow
+|   |   |   \---SearchMainPage
+|   |   +---ServiceFlow
+|   |   |   \---ServiceDetailPage
+|   |   \---UserDetailFlow
+|   |       \---UserDetailPage
+|   \---Messages
+|       +---api
+|       +---ChatPage
+|       +---CommentsPage
+|       +---FollowersPage
+|       +---LikesPage
+|       +---MainPage
+|       |   \---components
+|       |       +---CategoryArea
+|       |       +---ConversationArea
+|       |       \---NavigationArea
+|       +---NotificationsPage
+|       +---SharedComponents
+|       |   +---ChatBubble
+|       |   +---MessageItem
+|       |   +---SwipeActions
+|       |   \---UserAvatar
+|       \---stores
++---styles
+\---utils
+? ??? ???? PATH ??
+????? C9D0-4E5B
+D:\USERS\DUNGE\DOCUMENTS\GITHUB\XIANGYUPAI-RNEXPOAPP\ASSETS
+\---images
+    +---action-icons
+    +---icons
+    \---images
+        +---backgrounds
+        +---common
+        \---home
+            +---banner
+            +---bottom-navigation
+            +---header
+            +---limited-offers
+            \---team-party

@@ -25,9 +25,9 @@
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-    SafeAreaView,
-    StatusBar,
-    StyleSheet
+  SafeAreaView,
+  StatusBar,
+  StyleSheet
 } from 'react-native';
 
 // 类型和常量
