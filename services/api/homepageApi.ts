@@ -291,7 +291,7 @@ export const homepageApi = new HomepageAPI();
 
 // 导出类型
 export type {
-    BannerData, FeaturedUser, FeaturedUsersParams, HomepageConfig, HomepageData,
-    HomepageDataParams, ServiceConfigParams, ServiceItem, TrackingEvent
+  BannerData, FeaturedUser, FeaturedUsersParams, HomepageConfig, HomepageData,
+  HomepageDataParams, ServiceConfigParams, ServiceItem, TrackingEvent
 };
 

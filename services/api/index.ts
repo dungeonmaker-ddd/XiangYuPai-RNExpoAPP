@@ -18,26 +18,26 @@ export type { ApiError, ApiResponse, RequestConfig } from './client';
 
 // 导出Homepage API类型
 export type {
-    BannerData, FeaturedUser, FeaturedUsersParams, HomepageConfig, HomepageData,
-    HomepageDataParams, ServiceConfigParams, ServiceItem, TrackingEvent
+  BannerData, FeaturedUser, FeaturedUsersParams, HomepageConfig, HomepageData,
+  HomepageDataParams, ServiceConfigParams, ServiceItem, TrackingEvent
 } from './homepageApi';
 
 // 导出User API类型
 export type {
-    FavoriteUserParams, FollowUserParams, ReportUserParams, User, UserDetailInfo, UserListParams,
-    UserListResponse, UserRecommendationParams, UserSearchParams,
-    UserSearchResponse
+  FavoriteUserParams, FollowUserParams, ReportUserParams, User, UserDetailInfo, UserListParams,
+  UserListResponse, UserRecommendationParams, UserSearchParams,
+  UserSearchResponse
 } from './userApi';
 
 // 导出Location API类型
 export type {
-    CityInfo, Coordinates, DistrictInfo, GeocodeResponse, LocationInfo
+  CityInfo, Coordinates, DistrictInfo, GeocodeResponse, LocationInfo
 } from './locationApi';
 
 // 导出Service API类型
 export type {
-    ServiceDetail, ServiceTypeConfig,
-    ServiceUserFilters
+  ServiceDetail, ServiceTypeConfig,
+  ServiceUserFilters
 } from './serviceApi';
 
 // API工具函数
