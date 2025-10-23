@@ -18,52 +18,52 @@ export type { AuthActions, AuthState } from './stores/authStore';
 // #region API服务
 export { authApi, mockAuthApi } from './api/authApi';
 export type {
-    ApiResponse, LoginRequest,
-    LoginResponse,
-    SendCodeRequest,
-    SendCodeResponse
+  ApiResponse, LoginRequest,
+  LoginResponse,
+  SendCodeRequest,
+  SendCodeResponse
 } from './api/authApi';
 
 // #endregion
 
 // #region 类型定义
 export type {
-    ActionButtonAreaProps, AgreementAreaProps, AuthInputAreaProps,
-    // 基础类型
-    AuthMode, AuxiliaryAreaProps, CountdownState, ErrorState, LoadingState, LoginFormData,
-    // 组件Props类型
-    LoginMainPageProps, PhoneInputAreaProps, RegionInfo, TopWelcomeAreaProps, UseLoginPageLogicReturn,
-    // Hook返回类型
-    UseLoginPageStateReturn, UserInfo, ValidationState
+  ActionButtonAreaProps, AgreementAreaProps, AuthInputAreaProps,
+  // 基础类型
+  AuthMode, AuxiliaryAreaProps, CountdownState, ErrorState, LoadingState, LoginFormData,
+  // 组件Props类型
+  LoginMainPageProps, PhoneInputAreaProps, RegionInfo, TopWelcomeAreaProps, UseLoginPageLogicReturn,
+  // Hook返回类型
+  UseLoginPageStateReturn, UserInfo, ValidationState
 } from './LoginMainPage/types';
 
 // #endregion
 
 // #region 常量配置
 export {
-    AUTH_COLORS,
-    AUTH_ROUTES, COMMON_REGIONS, DEFAULT_REGION, ERROR_MESSAGES, LOGIN_CONSTANTS, MODAL_ROUTES, VALIDATION_RULES
+  AUTH_COLORS,
+  AUTH_ROUTES, COMMON_REGIONS, DEFAULT_REGION, ERROR_MESSAGES, LOGIN_CONSTANTS, MODAL_ROUTES, VALIDATION_RULES
 } from './LoginMainPage/constants';
 
 // #endregion
 
 // #region 样式工具
 export {
-    colorUtils, mediaQuery, responsive, safeArea, styleUtils
+  colorUtils, mediaQuery, responsive, safeArea, styleUtils
 } from './LoginMainPage/styles';
 
 // #endregion
 
 // #region Hooks
 export {
-    useAuthInitialization,
-    useAuthStateListener,
-    useAutoLoginCheck,
-    useRouteGuard
+  useAuthInitialization,
+  useAuthStateListener,
+  useAutoLoginCheck,
+  useRouteGuard
 } from './hooks';
 
 export type {
-    InitializationState, RouteGuardState, UseAuthInitializationReturn, UseRouteGuardReturn
+  InitializationState, RouteGuardState, UseAuthInitializationReturn, UseRouteGuardReturn
 } from './hooks';
 
 // #endregion

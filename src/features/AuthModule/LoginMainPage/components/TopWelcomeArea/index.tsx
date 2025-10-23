@@ -22,15 +22,18 @@
 // #endregion
 
 // #region 2. Imports
+import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo } from 'react';
 import {
-    Animated,
-    Image,
-    Platform,
-    StatusBar,
-    StyleSheet,
-    Text,
-    View,
+  Animated,
+  Image,
+  Platform,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 // LinearGradient removed - using solid background instead
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -63,12 +66,12 @@ interface StatusBarConfig {
 
 // #region 4. Constants & Config
 /**
- * 欢迎内容配置
+ * 欢迎内容配置 - 按照UI设计图
  */
 const WELCOME_CONTENT: WelcomeContent = {
-  title: '探店派',
-  subtitle: '发现生活，连接世界',
-  description: '欢迎回来，请登录您的账户',
+  title: '您好！',
+  subtitle: '欢迎使用探店',
+  description: '',
 } as const;
 
 /**
@@ -334,9 +337,27 @@ const DescriptionComponent: React.FC<{
 ));
 
 /**
+ * BackButton - 返回按钮组件
+ */
+const BackButton: React.FC<{
+  onPress: () => void;
+}> = React.memo(({ onPress }) => (
+  <TouchableOpacity
+    style={styles.backButton}
+    onPress={onPress}
+    activeOpacity={0.6}
+  >
+    <Ionicons name="arrow-back" size={24} color="#9CA3AF" />
+  </TouchableOpacity>
+));
+
+/**
  * TopWelcomeArea 主组件
  */
 const TopWelcomeArea: React.FC<TopWelcomeAreaProps> = ({ style }) => {
+  // 路由
+  const router = useRouter();
+  
   // 安全区域
   const insets = useSafeAreaInsets();
   
@@ -347,6 +368,16 @@ const TopWelcomeArea: React.FC<TopWelcomeAreaProps> = ({ style }) => {
   
   // 状态栏控制
   useStatusBarControl();
+  
+  // 返回处理
+  const handleBack = useCallback(() => {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      // 如果无法返回，跳转到首页
+      router.replace('/(tabs)' as any);
+    }
+  }, [router]);
   
   // 计算顶部间距
   const topSpacing = useMemo(
@@ -361,30 +392,19 @@ const TopWelcomeArea: React.FC<TopWelcomeAreaProps> = ({ style }) => {
     <View
       style={[
         styles.container,
-        backgroundStyle,
         { paddingTop: topSpacing },
         style,
       ]}
     >
-      {/* Logo区域 */}
-      <LogoComponent
-        source={logoSource}
-        onPress={handleLogoPress}
-        scaleAnim={scaleAnim}
-      />
+      {/* 返回按钮 - 左上角 */}
+      <BackButton onPress={handleBack} />
       
-      {/* 标题区域 */}
+      {/* 标题区域 - 按照UI设计图，不显示Logo */}
       <TitleComponent
         title={content.title}
         subtitle={content.subtitle}
         fadeAnim={fadeAnim}
         slideAnim={slideAnim}
-      />
-      
-      {/* 描述区域 */}
-      <DescriptionComponent
-        description={content.description}
-        fadeAnim={fadeAnim}
       />
     </View>
   );
@@ -397,16 +417,26 @@ export default React.memo(TopWelcomeArea);
 export type { TopWelcomeAreaProps };
 
     export {
-        getPersonalizedWelcome, getTimeBasedGreeting, LOGO_CONFIG, WELCOME_CONTENT
-    };
+    getPersonalizedWelcome, getTimeBasedGreeting, LOGO_CONFIG, WELCOME_CONTENT
+  };
 // #endregion
 
 // Styles
 const styles = StyleSheet.create({
   container: {
-    alignItems: 'center',
-    paddingBottom: UI_SIZES.SPACING.XL,
-    minHeight: responsive.scale(200),
+    alignItems: 'flex-start',
+    paddingBottom: 12,
+    paddingTop: 0,
+    position: 'relative',
+  },
+  
+  // 返回按钮样式
+  backButton: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    padding: 8,
+    zIndex: 10,
   },
   
   logoContainer: {
@@ -428,25 +458,26 @@ const styles = StyleSheet.create({
   },
   
   titleContainer: {
-    alignItems: 'center',
-    marginBottom: UI_SIZES.SPACING.MD,
+    alignItems: 'flex-start',
+    marginBottom: 0,
+    paddingVertical: 0,
   },
   
   titleText: {
-    fontSize: responsive.fontSize(28),
+    fontSize: 28,
     fontWeight: '700',
-    color: AUTH_COLORS.TEXT_PRIMARY,
+    color: '#1F2937',
     letterSpacing: -0.5,
-    marginBottom: UI_SIZES.SPACING.XS,
-    textAlign: 'center',
+    marginBottom: 4,
+    textAlign: 'left',
   },
   
   subtitleText: {
-    fontSize: responsive.fontSize(16),
-    fontWeight: '500',
-    color: AUTH_COLORS.TEXT_SECONDARY,
-    letterSpacing: 0.2,
-    textAlign: 'center',
+    fontSize: 28,
+    fontWeight: '400',
+    color: '#1F2937',
+    letterSpacing: -0.5,
+    textAlign: 'left',
   },
   
   descriptionContainer: {

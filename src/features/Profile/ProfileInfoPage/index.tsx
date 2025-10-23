@@ -11,12 +11,18 @@
 // #region 2. Imports
 import React, { useEffect, useState } from 'react';
 import {
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
+
+// Store和API
+import { useProfileStore } from '@/stores/profileStore';
+import { mockProfileApi, profileApi } from '@/services/api/profileApi';
+import { profileDataTransform } from '../utils/dataTransform';
+
 import type { ProfileFields, SkillItem } from '../types';
 // #endregion
 
@@ -55,28 +61,74 @@ const generateMockSkills = (): SkillItem[] => [
 // #endregion
 
 // #region 6-7. State & Logic
-const useProfileInfoLogic = (userId: string) => {
+const useProfileInfoLogic = (userId: string, isOwnProfile: boolean) => {
   const [profileFields, setProfileFields] = useState<ProfileFields | null>(null);
   const [skills, setSkills] = useState<SkillItem[]>([]);
+  const [loading, setLoading] = useState(false);
+  
+  // 从Store获取当前用户资料
+  const currentProfile = useProfileStore((state) => state.currentProfile);
   
   useEffect(() => {
-    // TODO: 调用API加载数据
-    setProfileFields(generateMockProfileFields());
-    setSkills(generateMockSkills());
-  }, [userId]);
+    const loadProfileData = async () => {
+      setLoading(true);
+      try {
+        console.log('\n📋 ProfileInfoPage - 加载资料数据');
+        console.log('   用户ID:', userId);
+        
+        // 🎯 调用API获取职业标签
+        const api = __DEV__ ? mockProfileApi : profileApi;
+        
+        const occupationsData = await api.getUserOccupations(Number(userId));
+        
+        // 🔄 转换职业数据
+        const skillsData = profileDataTransform.transformOccupationList(occupationsData);
+        setSkills(skillsData);
+        
+        console.log('✅ 职业标签加载完成:', skillsData.length, '个');
+        
+        // 🔄 从currentProfile构建资料字段
+        if (currentProfile) {
+          const fields: ProfileFields = {
+            location: currentProfile.location,
+            ipLocation: currentProfile.ipLocation,
+            height: currentProfile.height,
+            userId: currentProfile.id,
+            weight: currentProfile.weight,
+            occupation: currentProfile.occupations?.[0],
+            wechat: currentProfile.wechat,
+            birthday: currentProfile.birthday,
+          };
+          setProfileFields(fields);
+          console.log('✅ 资料字段构建完成');
+        }
+      } catch (error) {
+        console.error('❌ 加载资料数据失败:', error);
+        // 降级使用模拟数据
+        setProfileFields(generateMockProfileFields());
+        setSkills(generateMockSkills());
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    loadProfileData();
+  }, [userId, isOwnProfile, currentProfile]);
   
-  return { profileFields, skills };
+  return { profileFields, skills, loading };
 };
 // #endregion
 
 // #region 8. UI Components & Rendering
 const ProfileInfoPage: React.FC<ProfileInfoPageProps> = ({ userId, isOwnProfile }) => {
-  const { profileFields, skills } = useProfileInfoLogic(userId);
+  const { profileFields, skills, loading } = useProfileInfoLogic(userId, isOwnProfile);
   
-  if (!profileFields) {
+  if (loading || !profileFields) {
     return (
       <View style={styles.container}>
-        <Text style={styles.loadingText}>加载中...</Text>
+        <View style={styles.loadingContainer}>
+          <Text style={styles.loadingText}>加载中...</Text>
+        </View>
       </View>
     );
   }
@@ -250,6 +302,12 @@ const styles = StyleSheet.create({
   addText: {
     fontSize: 14,
     color: COLORS.TEXT_SECONDARY,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingTop: 100,
   },
   loadingText: {
     fontSize: 16,

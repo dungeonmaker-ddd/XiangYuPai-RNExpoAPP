@@ -11,6 +11,8 @@ import { create } from 'zustand';
 
 import { DEFAULT_STATE_VALUES, SECURE_KEYS } from '../LoginMainPage/constants';
 import type { AuthMode, UserInfo } from '../LoginMainPage/types';
+// 🆕 导入真实的后端API
+import { authApi as backendAuthApi } from '../../../../services/api/authApi';
 
 // #region 类型定义
 
@@ -128,47 +130,103 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
     }
   },
   
-  // 登录
+  // 登录 - 🆕 使用真实后端API
   login: async (credentials) => {
     console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    console.log('🔑 用户登录流程开始');
+    console.log('🔑 用户登录流程开始（真实后端API）');
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    console.log('   手机号:', credentials?.phone || '未提供');
+    console.log('   手机号/用户名:', credentials?.phone || credentials?.username || '未提供');
     console.log('   登录方式:', credentials?.password ? '密码登录' : '验证码登录');
     
-    // Mock实现
-    const mockToken = 'mock_token_' + Date.now();
-    const mockUser: UserInfo = {
-      id: 'user_123',
-      phone: credentials?.phone || '',
-      nickname: '测试用户',
-      verified: true,
-      createdAt: new Date().toISOString(),
-    };
-    
-    console.log('   步骤1: 保存token到SecureStore');
-    await secureStorage.setItem(SECURE_KEYS.ACCESS_TOKEN, mockToken);
-    await secureStorage.setItem(SECURE_KEYS.USER_CREDENTIALS, JSON.stringify(mockUser));
-    
-    console.log('   步骤2: 更新认证状态');
-    set({
-      isAuthenticated: true,
-      accessToken: mockToken,
-      userInfo: mockUser,
-    });
-    
-    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    console.log('✅ 登录成功！');
-    console.log(`   用户: ${mockUser.nickname}`);
-    console.log(`   Token: ${mockToken.substring(0, 20)}...`);
-    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+    try {
+      let response;
+      
+      if (credentials?.password) {
+        // 🎯 密码登录（后端需要username字段）
+        console.log('   步骤1: 调用后端密码登录API');
+        response = await backendAuthApi.loginWithPassword({
+          username: credentials.phone,  // 🆕 后端使用username字段，前端传phone值
+          password: credentials.password,
+          clientType: 'app',
+          deviceId: get().deviceId || generateDeviceId(),
+          rememberMe: false,
+        });
+      } else if (credentials?.smsCode) {
+        // 🎯 短信登录（后端需要mobile字段）
+        console.log('   步骤1: 调用后端短信登录API');
+        response = await backendAuthApi.loginWithSms({
+          mobile: credentials.phone,  // 🆕 后端使用mobile字段
+          smsCode: credentials.smsCode,
+          clientType: 'app',
+          deviceId: get().deviceId || generateDeviceId(),
+          rememberMe: false,
+        });
+      } else {
+        throw new Error('请提供密码或验证码');
+      }
+      
+      // 🎯 检查响应
+      if (!response.success || !response.data) {
+        throw new Error(response.message || '登录失败');
+      }
+      
+      const { accessToken, refreshToken, userInfo, expiresIn } = response.data;
+      
+      // 🆕 适配后端UserInfo到前端UserInfo
+      const adaptedUserInfo: UserInfo = {
+        id: String(userInfo.id),
+        phone: userInfo.mobile || credentials.phone || '',
+        nickname: userInfo.nickname || userInfo.username,
+        avatar: userInfo.avatar,
+        verified: userInfo.status === 1,
+        createdAt: new Date().toISOString(),
+      };
+      
+      console.log('   步骤2: 保存token到SecureStore');
+      await secureStorage.setItem(SECURE_KEYS.ACCESS_TOKEN, accessToken);
+      await secureStorage.setItem(SECURE_KEYS.REFRESH_TOKEN, refreshToken);
+      await secureStorage.setItem(SECURE_KEYS.USER_CREDENTIALS, JSON.stringify(adaptedUserInfo));
+      
+      console.log('   步骤3: 更新认证状态');
+      set({
+        isAuthenticated: true,
+        accessToken,
+        refreshToken,
+        userInfo: adaptedUserInfo,
+      });
+      
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      console.log('✅ 登录成功！');
+      console.log(`   用户ID: ${adaptedUserInfo.id}`);
+      console.log(`   用户名: ${adaptedUserInfo.nickname}`);
+      console.log(`   Token: ${accessToken.substring(0, 20)}...`);
+      console.log(`   过期时间: ${expiresIn}秒`);
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+    } catch (error: any) {
+      console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      console.error('❌ 登录失败！');
+      console.error('   错误:', error.message || error);
+      console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+      throw error;
+    }
   },
   
-  // 退出登录
+  // 退出登录 - 🆕 使用真实后端API
   logout: async () => {
     console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    console.log('👋 用户登出流程开始');
+    console.log('👋 用户登出流程开始（真实后端API）');
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    
+    try {
+      // 🎯 调用后端登出API
+      console.log('   步骤1: 调用后端登出接口');
+      await backendAuthApi.logout();
+      console.log('   ✅ 后端登出成功');
+    } catch (error) {
+      console.warn('   ⚠️ 后端登出失败（继续清除本地数据）:', error);
+      // 即使后端登出失败，也要清除本地数据
+    }
+    
     await get().clearAuthData();
     console.log('✅ 登出成功');
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
@@ -191,10 +249,71 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
     console.log('   📊 当前状态: isAuthenticated = false');
   },
   
-  // 刷新令牌
+  // 刷新令牌 - 🆕 使用真实后端API
   refreshAuthToken: async () => {
-    // TODO: 实现刷新令牌逻辑
-    console.log('Refreshing token...');
+    console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('🔄 Token刷新流程开始（真实后端API）');
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    
+    try {
+      const currentRefreshToken = get().refreshToken;
+      
+      if (!currentRefreshToken) {
+        throw new Error('没有refreshToken，无法刷新');
+      }
+      
+      console.log('   步骤1: 调用后端刷新Token接口');
+      const response = await backendAuthApi.refreshToken(currentRefreshToken);
+      
+      if (!response.success || !response.data) {
+        throw new Error(response.message || 'Token刷新失败');
+      }
+      
+      const { accessToken, refreshToken: newRefreshToken, userInfo } = response.data;
+      
+      // 🆕 适配用户信息（如果后端返回了）
+      let adaptedUserInfo = get().userInfo;
+      if (userInfo) {
+        adaptedUserInfo = {
+          id: String(userInfo.id),
+          phone: userInfo.mobile || get().userInfo?.phone || '',
+          nickname: userInfo.nickname || userInfo.username,
+          avatar: userInfo.avatar,
+          verified: userInfo.status === 1,
+          createdAt: new Date().toISOString(),
+        };
+      }
+      
+      console.log('   步骤2: 保存新token到SecureStore');
+      await secureStorage.setItem(SECURE_KEYS.ACCESS_TOKEN, accessToken);
+      await secureStorage.setItem(SECURE_KEYS.REFRESH_TOKEN, newRefreshToken);
+      if (adaptedUserInfo) {
+        await secureStorage.setItem(SECURE_KEYS.USER_CREDENTIALS, JSON.stringify(adaptedUserInfo));
+      }
+      
+      console.log('   步骤3: 更新认证状态');
+      set({
+        accessToken,
+        refreshToken: newRefreshToken,
+        userInfo: adaptedUserInfo,
+        isAuthenticated: true,
+      });
+      
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      console.log('✅ Token刷新成功！');
+      console.log(`   新Token: ${accessToken.substring(0, 20)}...`);
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+    } catch (error: any) {
+      console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      console.error('❌ Token刷新失败！');
+      console.error('   错误:', error.message || error);
+      console.error('   操作: 清除认证数据');
+      console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+      
+      // 刷新失败，清除所有认证数据
+      get().clearAuthData();
+      throw error;
+    }
   },
   
   // 设置用户信息

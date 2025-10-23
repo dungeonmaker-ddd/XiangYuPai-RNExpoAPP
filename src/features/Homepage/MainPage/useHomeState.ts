@@ -6,8 +6,11 @@
  * 更新: 2025-10-22
  */
 
+import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { homepageApiEnhanced } from '../../../../services/api/homepageApiEnhanced';
+// 🆕 导入认证状态
+import { useAuthStore } from '../../../features/AuthModule';
 import type { LocationInfo, UserCard } from './types';
 
 // Mock数据生成函数
@@ -45,6 +48,10 @@ const generateMockUsers = (filter: string = 'nearby', region?: string): UserCard
  * 首页状态管理Hook
  */
 export const useHomeState = () => {
+  // 🆕 在Hook顶层调用router和authStore（修复Hook规则错误）
+  const router = useRouter();
+  const { isAuthenticated } = useAuthStore();
+  
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState('nearby');
   const [activeRegion, setActiveRegion] = useState('全部');
@@ -173,9 +180,25 @@ export const useHomeState = () => {
     [loadUsers, activeFilter, activeRegion]
   );
 
-  // 刷新处理
+  // 刷新处理 - 🆕 添加登录检查
   const handleRefresh = useCallback(() => {
     console.log('[useHomeState] 🔄 用户触发下拉刷新');
+    
+    // 🎯 检查登录状态（使用顶层的isAuthenticated）
+    if (!isAuthenticated) {
+      console.log('[useHomeState] 🔐 用户未登录，直接跳转登录页');
+      setRefreshing(false);
+      
+      // 🎯 直接跳转到登录页，不显示弹窗
+      router.push({
+        pathname: '/auth/login',
+        params: { returnTo: '/(tabs)/homepage' },
+      });
+      return;
+    }
+    
+    // ✅ 已登录，执行刷新
+    console.log('[useHomeState] ✅ 用户已登录，执行刷新');
     setRefreshing(true);
     
     Promise.all([loadUsers(), loadLimitedOffers()])
@@ -188,7 +211,7 @@ export const useHomeState = () => {
       .finally(() => {
         setRefreshing(false);
       });
-  }, [loadUsers, loadLimitedOffers]);
+  }, [isAuthenticated, router, loadUsers, loadLimitedOffers]);
 
   // 初始化数据加载
   useEffect(() => {

@@ -23,7 +23,7 @@
 
 // #region 2. Imports
 import { useRouter } from 'expo-router';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect } from 'react';
 import {
   SafeAreaView,
   ScrollView,
@@ -33,8 +33,11 @@ import {
   View,
 } from 'react-native';
 
+// Store
+import { useProfileStore } from '@/stores/profileStore';
+
 // 类型和常量
-import type { TabType, UserProfile } from '../types';
+import type { TabType } from '../types';
 import { COLORS } from './constants';
 import type { MainPageProps } from './types';
 
@@ -55,77 +58,56 @@ import UserInfoArea from './UserInfoArea';
 // #endregion
 
 // #region 5. Utils & Helpers
-/**
- * 生成模拟用户数据
- */
-const generateMockUser = (userId?: string): UserProfile => {
-  return {
-    id: userId || 'current-user',
-    nickname: '门前游过一群鸭',
-    avatar: 'https://picsum.photos/200',
-    backgroundImage: 'https://picsum.photos/800/600',
-    gender: 'female',
-    age: 18,
-    bio: '人皮话多不高冷的真实写照',
-    location: '广东 深圳',
-    city: '深圳',
-    ipLocation: '广东 深圳',
-    distance: 4.6,
-    height: 162,
-    weight: 44,
-    occupations: ['模特'],
-    wechat: 'sunny0301',
-    birthday: '09-29',
-    isRealVerified: true,
-    isGodVerified: true,
-    isVip: false,
-    isOnline: true,
-    onlineStatus: 1,
-    followingCount: 201,
-    followerCount: 201,
-    likeCount: 999,
-    collectCount: 150,
-    createdAt: Date.now(),
-  };
-};
+// (工具函数移至Store层)
 // #endregion
 
 // #region 6. State Management
 /**
  * MainPage状态管理
+ * 使用Zustand Store管理用户资料数据
  */
 const useMainPageState = (props: MainPageProps) => {
-  const [activeTab, setActiveTab] = useState<TabType>(props.initialTab || 'dynamic');
-  const [userInfo, setUserInfo] = useState<UserProfile | null>(null);
-  const [loading, setLoading] = useState(false);
+  // 从Store获取状态
+  const currentProfile = useProfileStore((state) => state.currentProfile);
+  const activeTab = useProfileStore((state) => state.activeTab);
+  const loading = useProfileStore((state) => state.loading);
+  const error = useProfileStore((state) => state.error);
+  
+  // 获取Actions
+  const setActiveTab = useProfileStore((state) => state.setActiveTab);
+  const loadUserProfile = useProfileStore((state) => state.loadUserProfile);
+  const followUser = useProfileStore((state) => state.followUser);
+  const unfollowUser = useProfileStore((state) => state.unfollowUser);
   
   // 判断是否是自己的主页
   const isOwnProfile = !props.userId || props.userId === 'current-user';
   
-  // 加载用户信息
+  // 初始化Tab（如果props指定了初始Tab）
   useEffect(() => {
-    const loadUserInfo = async () => {
-      setLoading(true);
-      try {
-        // TODO: 调用API获取用户信息
-        const mockUser = generateMockUser(props.userId);
-        setUserInfo(mockUser);
-      } catch (error) {
-        console.error('加载用户信息失败:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
+    if (props.initialTab && props.initialTab !== activeTab) {
+      setActiveTab(props.initialTab);
+    }
+  }, [props.initialTab, activeTab, setActiveTab]);
+  
+  // 加载用户资料
+  useEffect(() => {
+    console.log('\n📱 MainPage - 开始加载用户资料');
+    console.log('   用户ID:', props.userId || 'current-user');
+    console.log('   是否本人:', isOwnProfile);
     
-    loadUserInfo();
-  }, [props.userId]);
+    loadUserProfile(props.userId);
+  }, [props.userId, loadUserProfile]);
   
   return {
     activeTab,
     setActiveTab,
-    userInfo,
+    userInfo: currentProfile,
     loading,
+    error,
     isOwnProfile,
+    followUser,
+    unfollowUser,
+    loadUserProfile,
   };
 };
 // #endregion
@@ -174,28 +156,47 @@ const useMainPageLogic = (props: MainPageProps) => {
   /**
    * 关注按钮
    */
-  const handleFollowPress = useCallback(() => {
-    console.log('关注用户');
-    // TODO: 调用关注API
-  }, []);
+  const handleFollowPress = useCallback(async () => {
+    if (!state.userInfo) return;
+    
+    try {
+      const targetUserId = Number(state.userInfo.id);
+      
+      // TODO: 检查当前关注状态，然后决定关注或取消关注
+      // 这里简化为直接关注
+      await state.followUser(targetUserId);
+      
+      console.log('✅ 关注操作完成，刷新用户资料');
+      
+      // 刷新用户资料
+      if (state.loadUserProfile) {
+        await state.loadUserProfile(props.userId);
+      }
+    } catch (error) {
+      console.error('❌ 关注操作失败:', error);
+    }
+  }, [state, props.userId]);
   
   /**
    * 社交数据点击
    */
   const handleFollowingPress = useCallback(() => {
-    console.log('查看关注列表');
-    // TODO: 跳转到关注列表
-  }, []);
+    console.log('🧭 导航: 查看关注列表');
+    // TODO: 跳转到关注列表页面
+    // router.push('/profile/following');
+  }, [router]);
   
   const handleFollowerPress = useCallback(() => {
-    console.log('查看粉丝列表');
-    // TODO: 跳转到粉丝列表
-  }, []);
+    console.log('🧭 导航: 查看粉丝列表');
+    // TODO: 跳转到粉丝列表页面
+    // router.push('/profile/followers');
+  }, [router]);
   
   const handleLikePress = useCallback(() => {
-    console.log('查看获赞与收藏');
+    console.log('🧭 导航: 查看获赞与收藏');
     // TODO: 跳转到获赞收藏页面
-  }, []);
+    // router.push('/profile/like-collect');
+  }, [router]);
   
   return {
     ...state,

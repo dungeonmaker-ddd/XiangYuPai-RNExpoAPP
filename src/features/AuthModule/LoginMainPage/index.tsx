@@ -1,415 +1,328 @@
 // #region 1. File Banner & TOC
 /**
- * LoginMainPage - 登录模块主页面组件
+ * LoginMainPage - 登录模块主页面（重构版）
  * 
  * 功能描述：
- * - 集成6个区域组件构建完整登录页面
- * - 管理登录流程状态和业务逻辑
- * - 处理用户交互和导航跳转
- * - 统一错误处理和加载状态
+ * - 整合所有子组件构建完整登录页面
+ * - 支持密码登录和验证码登录模式切换
+ * - 集成真实后端API
+ * - 完整的表单验证和错误处理
+ * - 地区选择功能
+ * - Flutter样式完全复刻
  * 
  * TOC (快速跳转):
  * [1] File Banner & TOC
  * [2] Imports
  * [3] Types & Schema  
  * [4] Constants & Config
- * [5] Utils & Helpers
- * [6] State Management
- * [7] Domain Logic
- * [8] UI Components & Rendering
- * [9] Exports
+ * [5] State Management
+ * [6] Domain Logic
+ * [7] UI Components & Rendering
+ * [8] Exports
  */
 // #endregion
 
 // #region 2. Imports
-import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import React, { useCallback, useEffect, useMemo } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   Alert,
+  KeyboardAvoidingView,
   Platform,
   ScrollView,
   StyleSheet
 } from 'react-native';
 
-// Store imports
-import { useAuthDataStore } from '../stores/authDataStore';
-import { useAuthFlowStore } from '../stores/authFlowStore';
-import { useAuthStore } from '../stores/authStore';
-import { useAuthUIStore } from '../stores/authUIStore';
-
-// Area components
-import ActionButtonArea from './components/ActionButtonArea';
-import AgreementArea from './components/AgreementArea';
-import AuthInputArea from './components/AuthInputArea';
-import AuxiliaryArea from './components/AuxiliaryArea';
-import PhoneInputArea from './components/PhoneInputArea';
-import TopWelcomeArea from './components/TopWelcomeArea';
+// 🆕 新组件导入
+import {
+  ActionButtonArea,
+  AgreementArea,
+  AuthInputArea,
+  AuxiliaryArea,
+  RegionSelectModal,
+  TopWelcomeArea,
+  type Country,
+} from './components';
 
 // Shared components
-import { AuthKeyboardAvoid } from '../SharedComponents/Layout/AuthKeyboardAvoid';
 import { AuthSafeArea } from '../SharedComponents/Layout/AuthSafeArea';
 
-// Utils and constants
-import type { AuthMode, LoginFormData, LoginMainPageProps } from './types';
+// Store imports
+import { useAuthStore } from '../stores/authStore';
+
+// 🆕 真实后端API
+import { authApi as backendAuthApi } from '../../../../services/api/authApi';
 // #endregion
 
 // #region 3. Types & Schema
-interface UseLoginPageStateReturn {
-  // Auth states
-  isAuthenticated: boolean;
-  loginMode: AuthMode;
-  
-  // Form data
-  loginForm: LoginFormData;
-  validationState: {
-    phoneValid: boolean;
-    passwordValid: boolean;
-    codeValid: boolean;
-    agreementAccepted: boolean;
-  };
-  
-  // UI states
-  loading: {
-    login: boolean;
-    sendCode: boolean;
-  };
-  error: {
-    message: string;
-    visible: boolean;
-  };
-  countdown: {
-    value: number;
-    active: boolean;
-  };
+type LoginMode = 'password' | 'code';
+
+interface LoginFormData {
+  phoneNumber: string;
+  countryCode: string;
+  password: string;
+  verificationCode: string;
 }
 
-interface UseLoginPageLogicReturn {
-  // Event handlers
-  handlePhoneChange: (phone: string) => void;
-  handlePasswordChange: (password: string) => void;
-  handleCodeChange: (code: string) => void;
-  handleModeSwitch: (mode: AuthMode) => void;
-  handleLogin: () => Promise<void>;
-  handleSendCode: () => Promise<void>;
-  handleRegionPress: () => void;
-  handleForgotPassword: () => void;
-  handleAgreementChange: (accepted: boolean) => void;
-  
-  // Navigation handlers
-  navigateToHome: () => void;
-  navigateToResetFlow: () => void;
+interface LoginMainPageProps {
+  // 可选的初始模式
+  initialMode?: LoginMode;
 }
 // #endregion
 
 // #region 4. Constants & Config
-const KEYBOARD_BEHAVIOR = Platform.OS === 'ios' ? 'padding' : 'height';
-const KEYBOARD_OFFSET = Platform.OS === 'ios' ? 64 : 0;
+const COLORS = {
+  BACKGROUND: '#FFFFFF',
+} as const;
 
-// Form validation rules
-const VALIDATION_RULES = {
-  PHONE_MIN_LENGTH: 11,
+const CONFIG = {
   PASSWORD_MIN_LENGTH: 6,
+  PASSWORD_MAX_LENGTH: 20,
+  PHONE_LENGTH: 11,
   CODE_LENGTH: 6,
-} as const;
-
-// Error messages
-const ERROR_MESSAGES = {
-  PHONE_INVALID: '请输入正确的手机号',
-  PASSWORD_TOO_SHORT: '密码至少6位',
-  CODE_INVALID: '验证码格式错误',
-  AGREEMENT_REQUIRED: '请同意用户协议',
-  NETWORK_ERROR: '网络连接失败，请重试',
+  COUNTDOWN_SECONDS: 60,
 } as const;
 // #endregion
 
-// #region 5. Utils & Helpers
+// #region 5. State Management
 /**
- * 验证手机号格式
+ * 表单验证Hook
  */
-const validatePhone = (phone: string): boolean => {
-  const phoneRegex = /^1[3-9]\d{9}$/;
-  return phoneRegex.test(phone);
-};
-
-/**
- * 验证密码强度
- */
-const validatePassword = (password: string): boolean => {
-  return password.length >= VALIDATION_RULES.PASSWORD_MIN_LENGTH;
-};
-
-/**
- * 验证验证码格式
- */
-const validateCode = (code: string): boolean => {
-  const codeRegex = /^\d{6}$/;
-  return codeRegex.test(code);
-};
-
-/**
- * 格式化错误消息
- */
-const formatErrorMessage = (error: any): string => {
-  if (typeof error === 'string') return error;
-  if (error?.message) return error.message;
-  if (error?.response?.data?.message) return error.response.data.message;
-  return ERROR_MESSAGES.NETWORK_ERROR;
-};
-
-/**
- * 检查表单完整性
- */
-const checkFormComplete = (
-  loginForm: LoginFormData,
-  loginMode: AuthMode,
-  agreementAccepted: boolean
-): boolean => {
-  const phoneValid = validatePhone(loginForm.phone);
-  const agreementValid = agreementAccepted;
+const useFormValidation = (formData: LoginFormData, loginMode: LoginMode) => {
+  // 手机号验证（11位）
+  const phoneValid = formData.phoneNumber.length === CONFIG.PHONE_LENGTH;
   
-  if (loginMode === 'password') {
-    const passwordValid = validatePassword(loginForm.password);
-    return phoneValid && passwordValid && agreementValid;
-  } else {
-    const codeValid = validateCode(loginForm.smsCode);
-    return phoneValid && codeValid && agreementValid;
-  }
-};
-// #endregion
-
-// #region 6. State Management
-/**
- * 登录页面状态管理Hook
- */
-const useLoginPageState = (): UseLoginPageStateReturn => {
-  // Auth store states
-  const { isAuthenticated, loginMode } = useAuthStore();
+  // 密码验证（6-20位，非纯数字）
+  const passwordValid = 
+    formData.password.length >= CONFIG.PASSWORD_MIN_LENGTH &&
+    formData.password.length <= CONFIG.PASSWORD_MAX_LENGTH &&
+    !/^\d+$/.test(formData.password);
   
-  // Data store states  
-  const { loginForm, validationState } = useAuthDataStore();
+  // 验证码验证（6位数字）
+  const codeValid = formData.verificationCode.length === CONFIG.CODE_LENGTH;
   
-  // UI store states
-  const { loading, error, countdown } = useAuthUIStore();
+  // 登录按钮是否可用
+  const loginDisabled = loginMode === 'password' 
+    ? !phoneValid || !passwordValid
+    : !phoneValid || !codeValid;
+  
+  // 发送验证码按钮是否可用
+  const sendCodeDisabled = !phoneValid;
   
   return {
-    isAuthenticated,
-    loginMode,
-    loginForm,
-    validationState,
-    loading: {
-      login: loading.login,
-      sendCode: loading.sendCode,
-    },
-    error: {
-      message: error.message,
-      visible: error.visible,
-    },
-    countdown: {
-      value: countdown.value,
-      active: countdown.active,
-    },
+    phoneValid,
+    passwordValid,
+    codeValid,
+    loginDisabled,
+    sendCodeDisabled,
   };
 };
 
 /**
- * 登录页面逻辑处理Hook
+ * 倒计时Hook
  */
-const useLoginPageLogic = (): UseLoginPageLogicReturn => {
-  const router = useRouter();
-  const params = useLocalSearchParams<{ returnTo?: string }>();  // 🎯 获取返回路径参数
+const useCountdown = () => {
+  const [countdown, setCountdown] = useState(0);
+  const [timer, setTimer] = useState<ReturnType<typeof setInterval> | null>(null);
   
-  // Store actions
-  const { login, switchMode } = useAuthStore();
-  const { updateLoginForm, validateForm } = useAuthDataStore();
-  const { setStep } = useAuthFlowStore();
-  const { setLoading, setError, startCountdown } = useAuthUIStore();
-  
-  // Event handlers
-  const handlePhoneChange = useCallback((phone: string) => {
-    updateLoginForm({ phone });
-    validateForm();
-  }, [updateLoginForm, validateForm]);
-  
-  const handlePasswordChange = useCallback((password: string) => {
-    updateLoginForm({ password });
-    validateForm();
-  }, [updateLoginForm, validateForm]);
-  
-  const handleCodeChange = useCallback((code: string) => {
-    updateLoginForm({ smsCode: code });
-    validateForm();
-  }, [updateLoginForm, validateForm]);
-  
-  const handleModeSwitch = useCallback((mode: AuthMode) => {
-    switchMode(mode);
-  }, [switchMode]);
-  
-  const handleLogin = useCallback(async () => {
-    try {
-      setLoading({ login: true });
-      setError({ message: '', visible: false });
-      
-      // 这里调用登录API
-      await login();
-      
-      // 登录成功后跳转
-      navigateToHome();
-    } catch (error) {
-      const errorMessage = formatErrorMessage(error);
-      setError({ message: errorMessage, visible: true });
-      Alert.alert('登录失败', errorMessage);
-    } finally {
-      setLoading({ login: false });
-    }
-  }, [login, setLoading, setError]);
-  
-  const handleSendCode = useCallback(async () => {
-    try {
-      setLoading({ sendCode: true });
-      setError({ message: '', visible: false });
-      
-      // 这里调用发送验证码API
-      // await sendSMS();
-      
-      // 开始倒计时
-      startCountdown(60, 'sms');
-      
-      Alert.alert('验证码已发送', '请查收短信验证码');
-    } catch (error) {
-      const errorMessage = formatErrorMessage(error);
-      setError({ message: errorMessage, visible: true });
-      Alert.alert('发送失败', errorMessage);
-    } finally {
-      setLoading({ sendCode: false });
-    }
-  }, [setLoading, setError, startCountdown]);
-  
-  const handleRegionPress = useCallback(() => {
-    router.push('/modal/region-select' as any);
-  }, [router]);
-  
-  const handleForgotPassword = useCallback(() => {
-    navigateToResetFlow();
+  const startCountdown = useCallback((seconds: number = CONFIG.COUNTDOWN_SECONDS) => {
+    setCountdown(seconds);
+    
+    const newTimer = setInterval(() => {
+      setCountdown(prev => {
+        if (prev <= 1) {
+          clearInterval(newTimer);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    
+    setTimer(newTimer);
   }, []);
   
-  const handleAgreementChange = useCallback((accepted: boolean) => {
-    // 更新协议同意状态
-    validateForm();
-  }, [validateForm]);
-  
-  // Navigation handlers
-  const navigateToHome = useCallback(() => {
-    // 🎯 支持返回到原本想访问的页面
-    if (params.returnTo) {
-      console.log('✅ 登录成功，返回到:', params.returnTo);
-      router.replace(params.returnTo as any);
-    } else {
-      console.log('✅ 登录成功，跳转到首页');
-      router.replace('/(tabs)/homepage');
+  const stopCountdown = useCallback(() => {
+    if (timer) {
+      clearInterval(timer);
+      setTimer(null);
     }
-  }, [router, params.returnTo]);
-  
-  const navigateToResetFlow = useCallback(() => {
-    setStep('reset_entry');
-    router.push('/auth/reset-entry' as any);
-  }, [router, setStep]);
+    setCountdown(0);
+  }, [timer]);
   
   return {
-    handlePhoneChange,
-    handlePasswordChange,
-    handleCodeChange,
-    handleModeSwitch,
-    handleLogin,
-    handleSendCode,
-    handleRegionPress,
-    handleForgotPassword,
-    handleAgreementChange,
-    navigateToHome,
-    navigateToResetFlow,
+    countdown,
+    isCountingDown: countdown > 0,
+    startCountdown,
+    stopCountdown,
   };
 };
 // #endregion
 
-// #region 7. Domain Logic
-/**
- * 页面初始化逻辑
- */
-const usePageInitialization = () => {
-  const { setStep } = useAuthFlowStore();
-  const { setError } = useAuthUIStore();
-  
-  // 页面焦点处理
-  useFocusEffect(
-    useCallback(() => {
-      // 设置当前步骤
-      setStep('login');
-      
-      // 清除错误状态
-      setError({ message: '', visible: false });
-      
-      // 页面焦点时的其他处理...
-      
-      return () => {
-        // 页面失焦时的清理工作...
-      };
-    }, [setStep, setError])
-  );
-  
-  // 页面初始化
-  useEffect(() => {
-    // 初始化逻辑...
-  }, []);
-};
-
-/**
- * 自动登录检查
- */
-const useAutoLoginCheck = () => {
-  const { isAuthenticated } = useAuthStore();
-  const { navigateToHome } = useLoginPageLogic();
-  
-  useEffect(() => {
-    if (isAuthenticated) {
-      navigateToHome();
-    }
-  }, [isAuthenticated, navigateToHome]);
-};
-// #endregion
-
-// #region 8. UI Components & Rendering
+// #region 6. Domain Logic
 /**
  * LoginMainPage 主组件
  */
-const LoginMainPage: React.FC<LoginMainPageProps> = ({ style }) => {
-  // 使用自定义Hooks
-  const state = useLoginPageState();
-  const logic = useLoginPageLogic();
+const LoginMainPage: React.FC<LoginMainPageProps> = ({
+  initialMode = 'password',
+}) => {
+  const router = useRouter();
+  const { login } = useAuthStore();
   
-  // 页面生命周期处理
-  usePageInitialization();
-  useAutoLoginCheck();
+  // 表单状态
+  const [loginMode, setLoginMode] = useState<LoginMode>(initialMode);
+  const [formData, setFormData] = useState<LoginFormData>({
+    phoneNumber: '',
+    countryCode: '+86',
+    password: '',
+    verificationCode: '',
+  });
   
-  // 计算属性
-  const formComplete = useMemo(() => {
-    return checkFormComplete(
-      state.loginForm,
-      state.loginMode,
-      state.validationState.agreementAccepted
-    );
-  }, [state.loginForm, state.loginMode, state.validationState.agreementAccepted]);
+  // UI状态
+  const [loading, setLoading] = useState({
+    login: false,
+    sendCode: false,
+  });
+  const [agreementAccepted, setAgreementAccepted] = useState(false);
+  const [regionModalVisible, setRegionModalVisible] = useState(false);
   
-  const keyboardBehavior = useMemo(() => KEYBOARD_BEHAVIOR, []);
-  const keyboardVerticalOffset = useMemo(() => KEYBOARD_OFFSET, []);
+  // 倒计时
+  const { countdown, isCountingDown, startCountdown } = useCountdown();
+  
+  // 表单验证
+  const validation = useFormValidation(formData, loginMode);
+  
+  // ============ 事件处理 ============
+  
+  /**
+   * 切换登录模式
+   */
+  const handleSwitchMode = useCallback(() => {
+    setLoginMode(prev => prev === 'password' ? 'code' : 'password');
+  }, []);
+  
+  /**
+   * 打开地区选择器
+   */
+  const handleOpenRegionSelector = useCallback(() => {
+    setRegionModalVisible(true);
+  }, []);
+  
+  /**
+   * 选择地区
+   */
+  const handleSelectRegion = useCallback((country: Country) => {
+    setFormData(prev => ({
+      ...prev,
+      countryCode: country.code,
+    }));
+  }, []);
+  
+  /**
+   * 发送验证码
+   */
+  const handleSendCode = useCallback(async () => {
+    if (validation.sendCodeDisabled || isCountingDown) return;
+    
+    try {
+      setLoading(prev => ({ ...prev, sendCode: true }));
+      
+      // 调用真实API
+      await backendAuthApi.sendSmsCode({
+        mobile: formData.phoneNumber,
+        type: 'login',
+        clientType: 'app',
+      });
+      
+      Alert.alert('成功', '验证码已发送，请查收短信');
+      startCountdown();
+    } catch (error: any) {
+      Alert.alert('发送失败', error.message || '验证码发送失败，请稍后重试');
+    } finally {
+      setLoading(prev => ({ ...prev, sendCode: false }));
+    }
+  }, [
+    validation.sendCodeDisabled,
+    isCountingDown,
+    formData.phoneNumber,
+    startCountdown,
+  ]);
+  
+  /**
+   * 登录
+   */
+  const handleLogin = useCallback(async () => {
+    if (validation.loginDisabled) {
+      Alert.alert('提示', '请完整填写登录信息');
+      return;
+    }
+    
+    // 按照UI设计图，登陆即表明同意协议，无需勾选
+    try {
+      setLoading(prev => ({ ...prev, login: true }));
+      
+      // 构建登录参数
+      const credentials = loginMode === 'password'
+        ? {
+            type: 'password' as const,
+            phone: formData.phoneNumber,
+            password: formData.password,
+          }
+        : {
+            type: 'sms' as const,
+            phone: formData.phoneNumber,
+            code: formData.verificationCode,
+          };
+      
+      // 调用真实登录API
+      await login(credentials);
+      
+      // 登录成功，跳转到首页
+      router.replace('/home' as any);
+    } catch (error: any) {
+      Alert.alert('登录失败', error.message || '登录失败，请检查您的登录信息');
+    } finally {
+      setLoading(prev => ({ ...prev, login: false }));
+    }
+  }, [
+    validation.loginDisabled,
+    agreementAccepted,
+    loginMode,
+    formData,
+    login,
+    router,
+  ]);
+  
+  /**
+   * 忘记密码
+   */
+  const handleForgotPassword = useCallback(() => {
+    Alert.alert('忘记密码', '请联系客服或使用验证码登录');
+  }, []);
+  
+  /**
+   * 快速注册
+   */
+  const handleQuickRegister = useCallback(() => {
+    Alert.alert('快速注册', '注册功能开发中...');
+  }, []);
+  
+  /**
+   * 查看协议
+   */
+  const handleViewAgreement = useCallback((type: 'user' | 'privacy') => {
+    const title = type === 'user' ? '用户协议' : '隐私政策';
+    Alert.alert(title, `${title}内容...`);
+  }, []);
   
   return (
-    <AuthSafeArea style={[styles.container, style]}>
-      <StatusBar style="dark" backgroundColor="transparent" translucent />
+    <AuthSafeArea>
+      <StatusBar style="dark" />
       
-      <AuthKeyboardAvoid
-        behavior={keyboardBehavior}
-        keyboardVerticalOffset={keyboardVerticalOffset}
-        style={styles.keyboardAvoidView}
+      <KeyboardAvoidingView
+        style={styles.container}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
       >
         <ScrollView
           style={styles.scrollView}
@@ -418,103 +331,121 @@ const LoginMainPage: React.FC<LoginMainPageProps> = ({ style }) => {
           showsVerticalScrollIndicator={false}
         >
           {/* 顶部欢迎区域 */}
-          <TopWelcomeArea style={styles.topWelcomeArea} />
-          
-          {/* 手机号输入区域 */}
-          <PhoneInputArea
-            phone={state.loginForm.phone}
-            region={state.loginForm.region}
-            onPhoneChange={logic.handlePhoneChange}
-            onRegionPress={logic.handleRegionPress}
-            phoneValid={state.validationState.phoneValid}
-            style={styles.phoneInputArea}
-          />
+          <TopWelcomeArea style={styles.welcomeArea} />
           
           {/* 认证输入区域 */}
           <AuthInputArea
-            mode={state.loginMode}
-            password={state.loginForm.password}
-            smsCode={state.loginForm.smsCode}
-            onModeChange={logic.handleModeSwitch}
-            onPasswordChange={logic.handlePasswordChange}
-            onCodeChange={logic.handleCodeChange}
-            passwordValid={state.validationState.passwordValid}
-            codeValid={state.validationState.codeValid}
+            loginMode={loginMode}
+            phoneNumber={formData.phoneNumber}
+            onPhoneNumberChange={(phone) => 
+              setFormData(prev => ({ ...prev, phoneNumber: phone }))
+            }
+            countryCode={formData.countryCode}
+            onCountryCodePress={handleOpenRegionSelector}
+            phoneValid={validation.phoneValid}
+            password={formData.password}
+            onPasswordChange={(password) => 
+              setFormData(prev => ({ ...prev, password }))
+            }
+            passwordValid={validation.passwordValid}
+            code={formData.verificationCode}
+            onCodeChange={(code) => 
+              setFormData(prev => ({ ...prev, verificationCode: code }))
+            }
+            codeValid={validation.codeValid}
             style={styles.authInputArea}
           />
           
-          {/* 主要操作按钮区域 */}
+          {/* 操作按钮区域 */}
           <ActionButtonArea
-            mode={state.loginMode}
-            onLogin={logic.handleLogin}
-            onSendCode={logic.handleSendCode}
-            loading={state.loading}
-            disabled={!formComplete}
-            countdown={state.countdown}
+            loginMode={loginMode}
+            onLogin={handleLogin}
+            onSendCode={loginMode === 'code' ? handleSendCode : undefined}
+            loginDisabled={validation.loginDisabled}
+            sendCodeDisabled={validation.sendCodeDisabled || isCountingDown}
+            loginLoading={loading.login}
+            sendCodeLoading={loading.sendCode}
+            countdown={countdown}
             style={styles.actionButtonArea}
           />
           
           {/* 辅助功能区域 */}
           <AuxiliaryArea
-            onForgotPassword={logic.handleForgotPassword}
+            onForgotPassword={handleForgotPassword}
+            onRegister={handleQuickRegister}
+            onSwitchLoginMode={handleSwitchMode}
+            loginMode={loginMode}
             style={styles.auxiliaryArea}
           />
           
-          {/* 协议同意区域 */}
+          {/* 协议区域 - 按照UI设计图，无需checkbox */}
           <AgreementArea
-            agreed={state.validationState.agreementAccepted}
-            onAgreementChange={logic.handleAgreementChange}
+            agreed={true}
+            onAgreementChange={() => {}}
+            onViewUserAgreement={() => handleViewAgreement('user')}
+            onViewPrivacyPolicy={() => handleViewAgreement('privacy')}
             style={styles.agreementArea}
           />
         </ScrollView>
-      </AuthKeyboardAvoid>
+      </KeyboardAvoidingView>
+      
+      {/* 地区选择模态框 */}
+      <RegionSelectModal
+        visible={regionModalVisible}
+        onClose={() => setRegionModalVisible(false)}
+        onSelect={handleSelectRegion}
+        selectedCode={formData.countryCode}
+      />
     </AuthSafeArea>
   );
 };
 // #endregion
 
-// #region 9. Exports
-export default React.memo(LoginMainPage);
+// #region 8. Exports
+export default LoginMainPage;
 
-export type {
-  LoginMainPageProps, UseLoginPageLogicReturn, UseLoginPageStateReturn
-};
+export type { LoginFormData, LoginMainPageProps, LoginMode };
 // #endregion
 
 // Styles
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: COLORS.BACKGROUND,
   },
-  keyboardAvoidView: {
-    flex: 1,
-  },
+  
   scrollView: {
     flex: 1,
+    backgroundColor: COLORS.BACKGROUND,
   },
+  
   scrollContent: {
     flexGrow: 1,
     paddingHorizontal: 24,
-    paddingBottom: 32,
+    paddingTop: 8,
+    paddingBottom: 24,
+    backgroundColor: COLORS.BACKGROUND,
   },
-  topWelcomeArea: {
-    marginTop: 40,
-    marginBottom: 32,
+  
+  welcomeArea: {
+    marginTop: 0,
+    marginBottom: 20,
   },
-  phoneInputArea: {
-    marginBottom: 24,
-  },
+  
   authInputArea: {
-    marginBottom: 24,
+    marginBottom: 18,
   },
+  
   actionButtonArea: {
-    marginBottom: 32,
+    marginBottom: 14,
   },
+  
   auxiliaryArea: {
-    marginBottom: 24,
-  },
-  agreementArea: {
     marginBottom: 16,
+  },
+  
+  agreementArea: {
+    marginTop: 'auto',
+    paddingTop: 8,
   },
 });

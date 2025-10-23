@@ -254,16 +254,14 @@ class ProfileAPI {
   
   /**
    * 更新在线状态
-   * PUT /api/v2/user/profile/{userId}/online-status
+   * PUT /api/v2/user/profile/{userId}/online-status?onlineStatus=X
    */
   async updateOnlineStatus(
     userId: number,
     onlineStatus: number
   ): Promise<void> {
     await apiClient.put(
-      `${API_ENDPOINTS.PROFILE.USER_PROFILE}/${userId}/online-status`,
-      null,
-      { params: { onlineStatus } }
+      `${API_ENDPOINTS.PROFILE.USER_PROFILE}/${userId}/online-status?onlineStatus=${onlineStatus}`
     );
   }
   
@@ -360,12 +358,11 @@ class ProfileAPI {
   
   /**
    * 获取人气用户排行
-   * GET /api/v1/users/stats/popular
+   * GET /api/v1/users/stats/popular?limit=X
    */
   async getPopularUsers(limit: number = 10): Promise<UserStatsVO[]> {
     const response = await apiClient.get<UserStatsVO[]>(
-      API_ENDPOINTS.USER_STATS.POPULAR,
-      { params: { limit } }
+      `${API_ENDPOINTS.USER_STATS.POPULAR}?limit=${limit}`
     );
     return response.data;
   }
@@ -421,30 +418,27 @@ class ProfileAPI {
   
   /**
    * 添加职业标签
-   * POST /api/v1/occupation/user/{userId}/add
+   * POST /api/v1/occupation/user/{userId}/add?occupationCode=X
    */
   async addUserOccupation(
     userId: number,
     occupationCode: string
   ): Promise<void> {
     await apiClient.post(
-      `${API_ENDPOINTS.OCCUPATION.USER}/${userId}/add`,
-      null,
-      { params: { occupationCode } }
+      `${API_ENDPOINTS.OCCUPATION.USER}/${userId}/add?occupationCode=${occupationCode}`
     );
   }
   
   /**
    * 删除职业标签
-   * DELETE /api/v1/occupation/user/{userId}/remove
+   * DELETE /api/v1/occupation/user/{userId}/remove?occupationCode=X
    */
   async removeUserOccupation(
     userId: number,
     occupationCode: string
   ): Promise<void> {
     await apiClient.delete(
-      `${API_ENDPOINTS.OCCUPATION.USER}/${userId}/remove`,
-      { params: { occupationCode } }
+      `${API_ENDPOINTS.OCCUPATION.USER}/${userId}/remove?occupationCode=${occupationCode}`
     );
   }
   
@@ -499,9 +493,11 @@ class ProfileAPI {
     pageNum?: number;
     pageSize?: number;
   }): Promise<{ total: number; rows: any[] }> {
+    const queryString = params 
+      ? `?${Object.entries(params).map(([k, v]) => `${k}=${v}`).join('&')}`
+      : '';
     const response = await apiClient.get<{ total: number; rows: any[] }>(
-      API_ENDPOINTS.RELATION.FOLLOWING,
-      { params }
+      `${API_ENDPOINTS.RELATION.FOLLOWING}${queryString}`
     );
     return response.data;
   }
@@ -515,9 +511,11 @@ class ProfileAPI {
     pageNum?: number;
     pageSize?: number;
   }): Promise<{ total: number; rows: any[] }> {
+    const queryString = params 
+      ? `?${Object.entries(params).map(([k, v]) => `${k}=${v}`).join('&')}`
+      : '';
     const response = await apiClient.get<{ total: number; rows: any[] }>(
-      API_ENDPOINTS.RELATION.FOLLOWERS,
-      { params }
+      `${API_ENDPOINTS.RELATION.FOLLOWERS}${queryString}`
     );
     return response.data;
   }
@@ -530,9 +528,11 @@ class ProfileAPI {
     userId: number,
     params?: { pageNum?: number; pageSize?: number }
   ): Promise<{ total: number; rows: any[] }> {
+    const queryString = params 
+      ? `?${Object.entries(params).map(([k, v]) => `${k}=${v}`).join('&')}`
+      : '';
     const response = await apiClient.get<{ total: number; rows: any[] }>(
-      `${API_ENDPOINTS.RELATION.USER_RELATIONS}/${userId}/following`,
-      { params }
+      `${API_ENDPOINTS.RELATION.USER_RELATIONS}/${userId}/following${queryString}`
     );
     return response.data;
   }
@@ -545,9 +545,11 @@ class ProfileAPI {
     userId: number,
     params?: { pageNum?: number; pageSize?: number }
   ): Promise<{ total: number; rows: any[] }> {
+    const queryString = params 
+      ? `?${Object.entries(params).map(([k, v]) => `${k}=${v}`).join('&')}`
+      : '';
     const response = await apiClient.get<{ total: number; rows: any[] }>(
-      `${API_ENDPOINTS.RELATION.USER_RELATIONS}/${userId}/followers`,
-      { params }
+      `${API_ENDPOINTS.RELATION.USER_RELATIONS}/${userId}/followers${queryString}`
     );
     return response.data;
   }
@@ -868,19 +870,6 @@ export const mockProfileApi = {
  * Profile API实例
  */
 export const profileApi = new ProfileAPI();
-
-/**
- * 导出类型
- */
-export type {
-  OccupationDictVO,
-  ProfileCompletenessVO,
-  UserOccupationUpdateDTO,
-  UserOccupationVO,
-  UserProfileUpdateDTO,
-  UserProfileVO,
-  UserStatsVO,
-};
 
 // #endregion
 
