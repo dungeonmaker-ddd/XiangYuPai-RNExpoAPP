@@ -267,7 +267,7 @@ export const serviceApi = new ServiceAPI();
 
 // 导出类型
 export type {
-    ServiceDetail, ServiceTypeConfig,
-    ServiceUserFilters
+  ServiceDetail, ServiceTypeConfig,
+  ServiceUserFilters
 };
 

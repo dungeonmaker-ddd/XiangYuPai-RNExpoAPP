@@ -37,18 +37,38 @@ export type TabType = 'follow' | 'hot' | 'local';
 
 /**
  * 动态数据类型
+ * 
+ * 对应后端：ContentListVO (xypai-content模块)
  */
 export interface Feed {
   id: string;
   userId: string;
   userInfo: UserInfo;
+  
+  // 内容信息
+  type: number;              // 内容类型(1=动态,2=活动,3=技能)
+  typeDesc: string;          // 类型描述
   title?: string;
+  summary?: string;          // 摘要
   content: string;
+  coverImage?: string;       // 封面图（v7.1新增）
+  
+  // 媒体列表
   mediaList: MediaItem[];
   topicList: Topic[];
+  
+  // 地理位置（v7.1新增 - 空间索引支持）
+  locationName?: string;     // 地点名称
+  locationAddress?: string;  // 详细地址
+  longitude?: number;        // 经度
+  latitude?: number;         // 纬度
+  distance?: number;         // 距离(km) - 仅附近内容查询返回
+  cityId?: number;           // 城市ID
+  
+  // 旧版位置信息（兼容）
   location?: LocationInfo;
   
-  // 互动数据
+  // 互动数据（来自ContentStats表 + Redis缓存）
   likeCount: number;
   commentCount: number;
   shareCount: number;
@@ -66,6 +86,8 @@ export interface Feed {
 
 /**
  * 用户信息类型
+ * 
+ * 对应后端：UserProfile冗余字段（Content表的user_nickname/user_avatar）
  */
 export interface UserInfo {
   id: string;
@@ -75,6 +97,13 @@ export interface UserInfo {
   age?: number;
   tags?: UserTag[];
   isFollowed: boolean;
+  
+  // v7.1新增：用户标识系统
+  isRealVerified?: boolean;  // 实名认证
+  isGodVerified?: boolean;   // 大神认证
+  isVip?: boolean;           // VIP用户
+  isPopular?: boolean;       // 人气用户
+  onlineStatus?: number;     // 在线状态(0=离线,1=在线,2=忙碌,3=隐身)
 }
 
 /**
@@ -129,18 +158,39 @@ export interface LocationInfo {
 
 /**
  * 评论数据类型
+ * 
+ * 对应后端：CommentVO (xypai-content模块 - v7.1新增)
  */
 export interface Comment {
   id: string;
-  feedId: string;
+  feedId: string;          // contentId
   userId: string;
   userInfo: UserInfo;
-  content: string;
-  replyTo?: string;
-  replyToUser?: UserInfo;
+  
+  // 评论内容
+  content: string;         // commentText
+  
+  // 回复关系（支持一级评论 + 二级回复）
+  parentId?: string;       // 一级评论ID（NULL=一级评论）
+  replyTo?: string;        // replyToId - 直接回复的评论ID
+  replyToUser?: UserInfo;  // 被回复用户信息
+  replyToUserId?: string;
+  replyToUserNickname?: string;
+  
+  // 统计数据
   likeCount: number;
-  isLiked: boolean;
+  replyCount: number;      // 回复数量
+  isTop: boolean;          // 是否置顶
+  
+  // 用户互动
+  isLiked: boolean;        // liked
+  
+  // 二级回复列表（仅一级评论返回，最多3条）
   replies: Comment[];
+  totalReplies?: number;   // 二级回复总数
+  hasMoreReplies?: boolean; // 是否有更多回复
+  
+  // 时间
   createdAt: number;
 }
 

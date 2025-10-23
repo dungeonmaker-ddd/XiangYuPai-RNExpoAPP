@@ -23,7 +23,7 @@
 
 // #region 2. Imports
 import { useRouter } from 'expo-router';
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo } from 'react';
 import {
   SafeAreaView,
   StatusBar,
@@ -31,18 +31,16 @@ import {
 } from 'react-native';
 
 // 类型和常量
-import { ROUTES } from '../constants';
 import type { Feed, TabType } from '../types';
-import { COLORS, PAGE_CONFIG } from './constants';
-import type { MainPageProps, MainPageState, TabDataState } from './types';
+import { COLORS } from './constants';
+import type { MainPageProps } from './types';
 
 // 区域组件
 import ContentArea from './components/ContentArea';
 import NavigationArea from './components/NavigationArea';
 
-// TODO: Stores和API后续集成
-// import { useDiscoveryStore } from '../stores/discoveryStore';
-// import * as discoveryApi from '../api/discoveryApi';
+// Stores和API集成
+import { useDiscoveryStore } from '@/stores';
 // #endregion
 
 // #region 3. Types & Schema
@@ -56,16 +54,23 @@ import NavigationArea from './components/NavigationArea';
 // #region 5. Utils & Helpers
 /**
  * 生成模拟动态数据（开发阶段使用）
+ * 
+ * 注：已集成真实API，此函数仅用于开发测试
  */
 const generateMockFeeds = (count: number, tab: TabType): Feed[] => {
   return Array.from({ length: count }, (_, index) => ({
     id: `feed-${tab}-${Date.now()}-${index}`,
     userId: `user-${Math.floor(Math.random() * 1000)}`,
+    
+    // 内容信息（v7.1新增）
+    type: 1,  // 1=动态
+    typeDesc: '动态',
+    
     userInfo: {
       id: `user-${Math.floor(Math.random() * 1000)}`,
       nickname: `用户${Math.floor(Math.random() * 1000)}`,
       avatar: `https://picsum.photos/seed/${Math.random()}/200`,
-      gender: Math.random() > 0.5 ? 'male' : 'female',
+      gender: Math.random() > 0.5 ? ('male' as const) : ('female' as const),
       age: 20 + Math.floor(Math.random() * 20),
       tags: [
         {
@@ -75,9 +80,14 @@ const generateMockFeeds = (count: number, tab: TabType): Feed[] => {
         },
       ],
       isFollowed: Math.random() > 0.5,
+      isPopular: Math.random() > 0.8,
+      isVip: Math.random() > 0.9,
     },
     title: Math.random() > 0.7 ? `动态标题 ${index + 1}` : undefined,
+    summary: `这是动态摘要 ${index + 1}`,
     content: `这是${tab === 'follow' ? '关注' : tab === 'hot' ? '热门' : '同城'}动态的内容 ${index + 1}。这里是一些有趣的文字描述...`,
+    coverImage: Math.random() > 0.6 ? `https://picsum.photos/seed/${Math.random()}/400/300` : undefined,
+    
     mediaList: Math.random() > 0.5 ? [
       {
         id: `media-${index}`,
@@ -98,6 +108,16 @@ const generateMockFeeds = (count: number, tab: TabType): Feed[] => {
         createdAt: Date.now(),
       },
     ] : [],
+    
+    // 地理位置（v7.1新增）
+    locationName: Math.random() > 0.7 ? '某个地点' : undefined,
+    locationAddress: Math.random() > 0.7 ? '某市某区某街道' : undefined,
+    longitude: Math.random() > 0.7 ? 116.4 + Math.random() : undefined,
+    latitude: Math.random() > 0.7 ? 39.9 + Math.random() : undefined,
+    distance: Math.random() > 0.7 ? Math.random() * 5 : undefined,  // km
+    cityId: Math.random() > 0.7 ? Math.floor(Math.random() * 100) : undefined,
+    
+    // 旧版位置信息（兼容）
     location: Math.random() > 0.7 ? {
       id: `loc-${index}`,
       name: '某个地点',
@@ -106,13 +126,19 @@ const generateMockFeeds = (count: number, tab: TabType): Feed[] => {
       longitude: 116.4 + Math.random(),
       distance: Math.floor(Math.random() * 5000),
     } : undefined,
+    
+    // 统计数据
     likeCount: Math.floor(Math.random() * 1000),
     commentCount: Math.floor(Math.random() * 500),
     shareCount: Math.floor(Math.random() * 100),
     collectCount: Math.floor(Math.random() * 200),
     viewCount: Math.floor(Math.random() * 5000),
+    
+    // 用户互动状态
     isLiked: Math.random() > 0.7,
     isCollected: Math.random() > 0.8,
+    
+    // 时间戳
     createdAt: Date.now() - Math.random() * 86400000,
     updatedAt: Date.now(),
   }));
@@ -147,72 +173,67 @@ const formatRelativeTime = (timestamp: number): string => {
 // #region 6. State Management
 /**
  * MainPage状态管理Hook
+ * 
+ * 使用Zustand Store管理状态
  */
 const useMainPageState = (props: MainPageProps) => {
-  // 当前激活的Tab
-  const [activeTab, setActiveTab] = useState<TabType>(props.initialTab || 'hot');
+  // 从Zustand Store获取状态
+  const activeTab = useDiscoveryStore((state) => state.ui.activeTab);
+  const feedData = useDiscoveryStore((state) => state.feedData);
+  const loading = useDiscoveryStore((state) => state.ui.loading);
+  const refreshing = useDiscoveryStore((state) => state.ui.refreshing);
+  const error = useDiscoveryStore((state) => state.ui.error);
   
-  // 本地UI状态
-  const [localState, setLocalState] = useState<MainPageState>({
-    loading: false,
-    refreshing: false,
-    error: null,
-    lastRefreshTime: 0,
-  });
-  
-  // Tab数据状态
-  const [tabData, setTabData] = useState<TabDataState>({
-    followFeeds: [],
-    hotFeeds: [],
-    localFeeds: [],
-    hasMore: {
-      follow: true,
-      hot: true,
-      local: true,
-    },
-    page: {
-      follow: 1,
-      hot: 1,
-      local: 1,
-    },
-  });
-  
-  // 上次刷新时间ref
-  const lastRefreshTimeRef = useRef(0);
-  
-  // TODO: 集成Zustand stores
-  // const { feeds, loadFeeds } = useDiscoveryStore();
+  // 获取Actions
+  const setActiveTab = useDiscoveryStore((state) => state.setActiveTab);
+  const loadFeedList = useDiscoveryStore((state) => state.loadFeedList);
+  const loadMoreFeeds = useDiscoveryStore((state) => state.loadMoreFeeds);
+  const toggleLike = useDiscoveryStore((state) => state.toggleLike);
+  const toggleCollect = useDiscoveryStore((state) => state.toggleCollect);
+  const shareFeed = useDiscoveryStore((state) => state.shareFeed);
   
   // 计算当前Tab的数据
   const currentFeeds = useMemo(() => {
     switch (activeTab) {
       case 'follow':
-        return tabData.followFeeds;
+        return feedData.followFeeds;
       case 'hot':
-        return tabData.hotFeeds;
+        return feedData.hotFeeds;
       case 'local':
-        return tabData.localFeeds;
+        return feedData.localFeeds;
       default:
         return [];
     }
-  }, [activeTab, tabData]);
+  }, [activeTab, feedData]);
   
   const currentHasMore = useMemo(() => {
-    return tabData.hasMore[activeTab];
-  }, [activeTab, tabData.hasMore]);
+    return feedData.hasMore[activeTab];
+  }, [activeTab, feedData.hasMore]);
+  
+  // 初始化Tab（如果props指定了初始Tab）
+  useEffect(() => {
+    if (props.initialTab && props.initialTab !== activeTab) {
+      setActiveTab(props.initialTab);
+    }
+  }, [props.initialTab, activeTab, setActiveTab]);
   
   return {
     // 状态
     activeTab,
-    setActiveTab,
-    localState,
-    setLocalState,
-    tabData,
-    setTabData,
     currentFeeds,
     currentHasMore,
-    lastRefreshTimeRef,
+    loading,
+    refreshing,
+    error,
     userId: props.userId,
+    
+    // Actions
+    setActiveTab,
+    loadFeedList,
+    loadMoreFeeds,
+    toggleLike,
+    toggleCollect,
+    shareFeed,
   };
 };
 // #endregion
@@ -227,13 +248,16 @@ const useMainPageLogic = (props: MainPageProps) => {
   const {
     activeTab,
     setActiveTab,
-    localState,
-    setLocalState,
-    tabData,
-    setTabData,
     currentFeeds,
     currentHasMore,
-    lastRefreshTimeRef,
+    loading,
+    refreshing,
+    error,
+    loadFeedList,
+    loadMoreFeeds,
+    toggleLike,
+    toggleCollect,
+    shareFeed,
   } = state;
   
   /**
@@ -241,39 +265,14 @@ const useMainPageLogic = (props: MainPageProps) => {
    */
   useEffect(() => {
     const initializeData = async () => {
-      setLocalState(prev => ({ ...prev, loading: true }));
-      
-      try {
-        // TODO: 替换为真实API调用
-        // const data = await discoveryApi.getFeedList({ tab: activeTab, page: 1 });
-        
-        // 模拟API延迟
-        await new Promise(resolve => setTimeout(resolve, PAGE_CONFIG.INITIAL_LOAD_DELAY));
-        
-        // 生成模拟数据
-        const mockData = generateMockFeeds(PAGE_CONFIG.PAGE_SIZE, activeTab);
-        
-        setTabData(prev => ({
-          ...prev,
-          [`${activeTab}Feeds`]: mockData,
-          page: {
-            ...prev.page,
-            [activeTab]: 1,
-          },
-        }));
-      } catch (error) {
-        console.error('初始化数据失败:', error);
-        setLocalState(prev => ({
-          ...prev,
-          error: '加载失败，请重试',
-        }));
-      } finally {
-        setLocalState(prev => ({ ...prev, loading: false }));
+      // 如果当前Tab还没有数据，则加载
+      if (currentFeeds.length === 0) {
+        await loadFeedList(activeTab, false);
       }
     };
     
     initializeData();
-  }, []); // 只在首次加载时执行
+  }, [activeTab]); // Tab切换时触发
   
   /**
    * 切换Tab
@@ -282,223 +281,108 @@ const useMainPageLogic = (props: MainPageProps) => {
     if (tab === activeTab) return;
     
     setActiveTab(tab);
-    
-    // 如果该Tab还没有数据，则加载
-    const tabFeeds = tabData[`${tab}Feeds` as keyof TabDataState];
-    if (Array.isArray(tabFeeds) && tabFeeds.length === 0) {
-      setLocalState(prev => ({ ...prev, loading: true }));
-      
-      // TODO: 替换为真实API调用
-      setTimeout(() => {
-        const mockData = generateMockFeeds(PAGE_CONFIG.PAGE_SIZE, tab);
-        setTabData(prev => ({
-          ...prev,
-          [`${tab}Feeds`]: mockData,
-        }));
-        setLocalState(prev => ({ ...prev, loading: false }));
-      }, 300);
-    }
-  }, [activeTab, tabData]);
+  }, [activeTab, setActiveTab]);
   
   /**
    * 下拉刷新
    */
   const handleRefresh = useCallback(async () => {
-    // 防止频繁刷新
-    const now = Date.now();
-    if (now - lastRefreshTimeRef.current < PAGE_CONFIG.REFRESH_COOLDOWN) {
-      return;
-    }
-    lastRefreshTimeRef.current = now;
-    
-    setLocalState(prev => ({ ...prev, refreshing: true }));
-    
-    try {
-      // TODO: 替换为真实API调用
-      // const data = await discoveryApi.getFeedList({ tab: activeTab, page: 1, refresh: true });
-      
-      await new Promise(resolve => setTimeout(resolve, 800));
-      
-      const mockData = generateMockFeeds(PAGE_CONFIG.PAGE_SIZE, activeTab);
-      
-      setTabData(prev => ({
-        ...prev,
-        [`${activeTab}Feeds`]: mockData,
-        page: {
-          ...prev.page,
-          [activeTab]: 1,
-        },
-        hasMore: {
-          ...prev.hasMore,
-          [activeTab]: true,
-        },
-      }));
-    } catch (error) {
-      console.error('刷新失败:', error);
-    } finally {
-      setLocalState(prev => ({
-        ...prev,
-        refreshing: false,
-        lastRefreshTime: Date.now(),
-      }));
-    }
-  }, [activeTab]);
+    await loadFeedList(activeTab, true);
+  }, [activeTab, loadFeedList]);
   
   /**
    * 加载更多
    */
   const handleLoadMore = useCallback(async () => {
-    if (!currentHasMore || localState.loading || localState.refreshing) {
-      return;
-    }
-    
-    setLocalState(prev => ({ ...prev, loading: true }));
-    
-    try {
-      const nextPage = tabData.page[activeTab] + 1;
-      
-      // TODO: 替换为真实API调用
-      // const data = await discoveryApi.getFeedList({ tab: activeTab, page: nextPage });
-      
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      const mockData = generateMockFeeds(PAGE_CONFIG.PAGE_SIZE, activeTab);
-      
-      setTabData(prev => ({
-        ...prev,
-        [`${activeTab}Feeds`]: [
-          ...((prev[`${activeTab}Feeds` as keyof TabDataState] as Feed[]) || []),
-          ...mockData,
-        ],
-        page: {
-          ...prev.page,
-          [activeTab]: nextPage,
-        },
-        hasMore: {
-          ...prev.hasMore,
-          [activeTab]: mockData.length === PAGE_CONFIG.PAGE_SIZE,
-        },
-      }));
-    } catch (error) {
-      console.error('加载更多失败:', error);
-    } finally {
-      setLocalState(prev => ({ ...prev, loading: false }));
-    }
-  }, [activeTab, currentHasMore, localState.loading, localState.refreshing, tabData.page]);
+    await loadMoreFeeds(activeTab);
+  }, [activeTab, loadMoreFeeds]);
   
   /**
    * 搜索按钮点击
    */
   const handleSearchPress = useCallback(() => {
-    router.push(ROUTES.DISCOVERY.MAIN + '/search');
+    // TODO: 创建搜索页面路由后启用
+    console.log('搜索功能');
+    // router.push(ROUTES.DISCOVERY.MAIN + '/search');
   }, [router]);
   
   /**
    * 动态卡片点击
    */
   const handleFeedPress = useCallback((feedId: string) => {
-    router.push({
-      pathname: ROUTES.DISCOVERY.DETAIL,
-      params: { feedId },
-    });
+    // TODO: 创建详情页面路由后启用
+    console.log('查看动态详情:', feedId);
+    // router.push({
+    //   pathname: ROUTES.DISCOVERY.DETAIL,
+    //   params: { feedId },
+    // });
   }, [router]);
   
   /**
    * 用户头像点击
    */
   const handleUserPress = useCallback((userId: string) => {
-    router.push({
-      pathname: ROUTES.MODAL.USER_DETAIL,
-      params: { userId },
-    });
+    // TODO: 创建用户详情页面路由后启用
+    console.log('查看用户详情:', userId);
+    // router.push({
+    //   pathname: ROUTES.MODAL.USER_DETAIL,
+    //   params: { userId },
+    // });
   }, [router]);
   
   /**
    * 话题点击
    */
   const handleTopicPress = useCallback((topicName: string) => {
-    router.push({
-      pathname: ROUTES.DISCOVERY.TOPIC,
-      params: { topicName },
-    });
+    // TODO: 创建话题详情页面路由后启用
+    console.log('查看话题详情:', topicName);
+    // router.push({
+    //   pathname: ROUTES.DISCOVERY.TOPIC,
+    //   params: { topicName },
+    // });
   }, [router]);
   
   /**
-   * 点赞
+   * 点赞（使用Store的乐观更新）
    */
   const handleLike = useCallback((feedId: string) => {
-    // TODO: 调用API
-    console.log('点赞:', feedId);
-    
-    // 乐观更新UI
-    setTabData(prev => {
-      const feeds = prev[`${activeTab}Feeds` as keyof TabDataState] as Feed[];
-      return {
-        ...prev,
-        [`${activeTab}Feeds`]: feeds.map(feed =>
-          feed.id === feedId
-            ? {
-                ...feed,
-                isLiked: !feed.isLiked,
-                likeCount: feed.isLiked ? feed.likeCount - 1 : feed.likeCount + 1,
-              }
-            : feed
-        ),
-      };
-    });
-  }, [activeTab]);
+    toggleLike(feedId, activeTab);
+  }, [activeTab, toggleLike]);
   
   /**
    * 评论
    */
   const handleComment = useCallback((feedId: string) => {
-    router.push({
-      pathname: ROUTES.DISCOVERY.DETAIL,
-      params: { feedId, autoFocusComment: 'true' },
-    });
+    // TODO: 创建详情页面路由后启用
+    console.log('评论动态:', feedId);
+    // router.push({
+    //   pathname: ROUTES.DISCOVERY.DETAIL,
+    //   params: { feedId, autoFocusComment: 'true' },
+    // });
   }, [router]);
   
   /**
    * 分享
    */
   const handleShare = useCallback((feedId: string) => {
-    // TODO: 实现分享功能
-    console.log('分享:', feedId);
-  }, []);
+    shareFeed(feedId);
+  }, [shareFeed]);
   
   /**
-   * 收藏
+   * 收藏（使用Store的乐观更新）
    */
   const handleCollect = useCallback((feedId: string) => {
-    // TODO: 调用API
-    console.log('收藏:', feedId);
-    
-    // 乐观更新UI
-    setTabData(prev => {
-      const feeds = prev[`${activeTab}Feeds` as keyof TabDataState] as Feed[];
-      return {
-        ...prev,
-        [`${activeTab}Feeds`]: feeds.map(feed =>
-          feed.id === feedId
-            ? {
-                ...feed,
-                isCollected: !feed.isCollected,
-                collectCount: feed.isCollected ? feed.collectCount - 1 : feed.collectCount + 1,
-              }
-            : feed
-        ),
-      };
-    });
-  }, [activeTab]);
+    toggleCollect(feedId, activeTab);
+  }, [activeTab, toggleCollect]);
   
   return {
     // 状态
     activeTab,
     currentFeeds,
     currentHasMore,
-    loading: localState.loading,
-    refreshing: localState.refreshing,
-    error: localState.error,
+    loading,
+    refreshing,
+    error,
     // 事件处理
     handleTabChange,
     handleRefresh,

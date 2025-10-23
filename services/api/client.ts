@@ -148,6 +148,7 @@ class ApiClient {
   private baseURL: string;
   private defaultHeaders: Record<string, string>;
   private authStoreGetter: any = null;  // 🎯 AuthStore的getter函数
+  private clientId: string = 'web_client';  // 🆕 客户端ID（与后端Sa-Token匹配）
 
   constructor() {
     this.baseURL = getBaseURL();
@@ -155,6 +156,17 @@ class ApiClient {
       'Content-Type': REQUEST_HEADERS.CONTENT_TYPE.JSON,
       'Accept': REQUEST_HEADERS.ACCEPT.JSON,
     };
+  }
+  
+  // 🆕 设置客户端ID
+  setClientId(clientId: string): void {
+    this.clientId = clientId;
+    console.log(`🔑 [API Client] 客户端ID已设置: ${clientId}`);
+  }
+  
+  // 🆕 获取客户端ID
+  getClientId(): string {
+    return this.clientId;
   }
 
   // 🎯 第三层：连接AuthStore，实现自动token管理
@@ -298,12 +310,13 @@ class ApiClient {
       console.log(`   请求: ${method} ${url}`);
     }
 
-    // 准备请求配置
+    // 🆕 准备请求配置（添加clientId）
     const requestConfig: RequestInit = {
       method,
       headers: {
         ...this.defaultHeaders,
         ...headers,
+        'X-Client-Id': this.clientId,  // 🆕 添加客户端ID到header（对应后端 LoginHelper.CLIENT_KEY）
       },
     };
 

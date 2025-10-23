@@ -44,14 +44,14 @@ src/features/Discovery/
 │   ├── Card/                    # 卡片组件系列
 │   └── Display/                 # 展示组件系列
 │
-├── stores/                      # 📊 状态管理
-│   └── discoveryStore.ts        # 发现页面状态
+├── utils/                      # 🛠️ 工具函数
+│   └── dataTransform.ts         # 数据转换工具 ⭐
 │
-└── api/                         # 🌐 API服务
-    ├── discoveryApi.ts          # 主API接口
-    ├── feedApi.ts               # 动态API
-    ├── topicApi.ts              # 话题API
-    └── interactionApi.ts        # 互动API
+├── 📊 状态管理（在项目根stores/）
+│   └── discoveryStore.ts        # 发现页面状态 ⭐
+│
+└── 🌐 API服务（在项目根services/api/）
+    └── discoveryApi.ts          # 发现页面API ⭐
 ```
 
 ---
@@ -155,30 +155,43 @@ import type { Feed, Comment, Topic } from '@/src/features/Discovery/types';
 
 ### ✅ 已完成
 - [x] 基础目录结构
-- [x] 类型定义（types.ts）
+- [x] 类型定义（types.ts - v7.1升级）
 - [x] 常量配置（constants.ts）
 - [x] 页面组主文件（index.tsx）
 - [x] README文档
+- [x] **MainPage主页面实施** ⭐
+- [x] **后端API集成** ⭐
+- [x] **Zustand Store状态管理** ⭐
+- [x] **数据转换层** ⭐
 
 ### 🔄 进行中
-- [ ] MainPage主页面实施
 - [ ] DetailPage详情页实施
 - [ ] 其他SubPages实施
+- [ ] 路由创建
 
 ### 📝 待开发
 - [ ] SharedComponents共享组件
-- [ ] Stores状态管理
-- [ ] API服务接口
+- [ ] Media服务集成
+- [ ] Topic服务集成
+- [ ] UserRelation服务集成
 
 ---
 
 ## 📖 参考文档
 
-- **架构设计文档**: `TxT2/架构设计文档/发现页面模块架构设计文档v2.0.md`
-- **补充文档**: `TxT2/架构设计文档/发现页面模块架构设计文档v2.0-补充.md`
-- **实施前必读**: `TxT2/架构设计文档/发现页面模块-实施前必读.md`
-- **首页模块参考**: `src/features/Homepage/HOMEPAGE_MODULE_ARCHITECTURE.md`
+### 前端架构
 - **核心架构标准**: `.cursor/rules/UNIVERSAL_COMPONENT_ARCHITECTURE_CORE.md`
+- **首页模块参考**: `src/features/Homepage/HOMEPAGE_MODULE_ARCHITECTURE.md`
+- **架构设计文档**: `TXT/页面设计+流程文档/发现页面模块架构设计文档.md` v1.6
+
+### 后端API
+- **数据库设计**: `RuoYi-Cloud-Plus/.cursor/rules/PL.md` v7.1
+- **后端README**: `xypai-content/README.md` v7.1
+- **API指南**: `xypai-content/docs/API_USAGE_GUIDE_v7.1.md`
+- **数据库脚本**: `dev_workspace/team/charlie_david/sql/02_create_tables.sql`
+
+### 集成文档
+- **集成完成报告**: `src/features/Discovery/API_INTEGRATION_COMPLETE.md` ⭐
 
 ---
 

@@ -1,10 +1,14 @@
 /**
  * useHomeState - 首页状态管理Hook
  * 统一管理首页所有状态逻辑
+ * 
+ * 版本: v2.0 - 集成真实后端API
+ * 更新: 2025-10-22
  */
 
-import { useState, useCallback, useEffect, useMemo } from 'react';
-import type { UserCard, LocationInfo } from './types';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { homepageApiEnhanced } from '../../../../services/api/homepageApiEnhanced';
+import type { LocationInfo, UserCard } from './types';
 
 // Mock数据生成函数
 const generateMockUsers = (filter: string = 'nearby', region?: string): UserCard[] => {
@@ -50,28 +54,91 @@ export const useHomeState = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [location, setLocation] = useState<LocationInfo>({ city: '深圳' });
 
-  // 加载用户数据
+  // 加载用户数据（集成真实API）
   const loadUsers = useCallback(async () => {
+    const startTime = Date.now();
+    console.log('[useHomeState] 🔄 开始加载用户列表', { filter: activeFilter, region: activeRegion });
+    
     setLoading(true);
     try {
-      await new Promise<void>(resolve => setTimeout(() => resolve(), 800));
+      // 🆕 尝试调用真实API
+      try {
+        console.log('[useHomeState] 📡 调用API: getUserList');
+        
+        const response = await homepageApiEnhanced.getUserList({
+          filterTab: activeFilter as 'nearby' | 'recommend' | 'latest',
+          region: activeRegion === '全部' ? undefined : activeRegion,
+          page: 1,
+          limit: 20,
+        });
+        
+        if (response.success && response.data.users.length > 0) {
+          console.log('[useHomeState] ✅ API加载成功', {
+            count: response.data.users.length,
+            total: response.data.total,
+            hasMore: response.data.hasMore,
+            duration: Date.now() - startTime + 'ms',
+          });
+          setUsers(response.data.users);
+          return;
+        } else {
+          console.warn('[useHomeState] ⚠️ API返回空数据，使用降级方案');
+        }
+      } catch (apiError) {
+        console.warn('[useHomeState] ⚠️ API调用失败，使用降级方案', apiError);
+      }
+      
+      // 🔄 降级为模拟数据
+      console.log('[useHomeState] 🔄 使用模拟数据生成用户列表');
+      await new Promise<void>(resolve => setTimeout(() => resolve(), 500));
       const regionFilter = activeRegion === '全部' ? undefined : activeRegion;
       const mockUsers = generateMockUsers(activeFilter, regionFilter);
       setUsers(mockUsers);
+      console.log('[useHomeState] ✅ 模拟数据加载完成', { count: mockUsers.length, duration: Date.now() - startTime + 'ms' });
+      
     } catch (error) {
-      console.error('Failed to load users:', error);
+      console.error('[useHomeState] ❌ 加载用户失败', error);
+      setUsers([]); // 失败时设置空数组
     } finally {
       setLoading(false);
     }
   }, [activeFilter, activeRegion]);
 
-  // 加载限时专享数据
+  // 加载限时专享数据（集成真实API）
   const loadLimitedOffers = useCallback(async () => {
+    const startTime = Date.now();
+    console.log('[useHomeState] 🔄 开始加载限时专享用户');
+    
     try {
+      // 🆕 尝试调用真实API
+      try {
+        console.log('[useHomeState] 📡 调用API: getFeaturedUsers');
+        
+        const response = await homepageApiEnhanced.getFeaturedUsers({
+          limit: 5,
+          refresh: false, // 使用缓存
+        });
+        
+        if (response.success && response.data.length > 0) {
+          console.log('[useHomeState] ✅ 精选用户API加载成功', { count: response.data.length, duration: Date.now() - startTime + 'ms' });
+          setLimitedOffers(response.data);
+          return;
+        } else {
+          console.warn('[useHomeState] ⚠️ 精选用户API返回空数据，使用降级方案');
+        }
+      } catch (apiError) {
+        console.warn('[useHomeState] ⚠️ 精选用户API失败，使用降级方案', apiError);
+      }
+      
+      // 🔄 降级为模拟数据
+      console.log('[useHomeState] 🔄 使用模拟数据生成精选用户');
       const mockOffers = generateMockUsers().slice(0, 5);
       setLimitedOffers(mockOffers);
+      console.log('[useHomeState] ✅ 模拟数据加载完成', { count: mockOffers.length, duration: Date.now() - startTime + 'ms' });
+      
     } catch (error) {
-      console.error('Failed to load limited offers:', error);
+      console.error('[useHomeState] ❌ 加载精选用户失败', error);
+      setLimitedOffers([]);
     }
   }, []);
 
@@ -83,6 +150,11 @@ export const useHomeState = () => {
         clearTimeout(timeoutId);
         timeoutId = setTimeout(async () => {
           if (query.trim()) {
+            console.log('[useHomeState] 🔍 执行搜索', { query, filter: activeFilter, region: activeRegion });
+            
+            // TODO: 集成真实搜索API
+            
+            // 降级：本地筛选
             const regionFilter = activeRegion === '全部' ? undefined : activeRegion;
             const allUsers = generateMockUsers(activeFilter, regionFilter);
             const filteredUsers = allUsers.filter(user =>
@@ -91,6 +163,7 @@ export const useHomeState = () => {
               user.bio.includes(query)
             );
             setUsers(filteredUsers);
+            console.log('[useHomeState] ✅ 本地搜索完成', { count: filteredUsers.length });
           } else {
             loadUsers();
           }
@@ -102,16 +175,38 @@ export const useHomeState = () => {
 
   // 刷新处理
   const handleRefresh = useCallback(() => {
+    console.log('[useHomeState] 🔄 用户触发下拉刷新');
     setRefreshing(true);
-    Promise.all([loadUsers(), loadLimitedOffers()]).finally(() => {
-      setRefreshing(false);
-    });
+    
+    Promise.all([loadUsers(), loadLimitedOffers()])
+      .then(() => {
+        console.log('[useHomeState] ✅ 刷新完成');
+      })
+      .catch(error => {
+        console.error('[useHomeState] ❌ 刷新失败', error);
+      })
+      .finally(() => {
+        setRefreshing(false);
+      });
   }, [loadUsers, loadLimitedOffers]);
 
   // 初始化数据加载
   useEffect(() => {
-    loadUsers();
-    loadLimitedOffers();
+    console.log('[useHomeState] 🚀 开始初始化加载', {
+      activeFilter,
+      activeRegion,
+      location: location.city,
+    });
+    
+    // 并行加载数据
+    Promise.all([
+      loadUsers(),
+      loadLimitedOffers(),
+    ]).then(() => {
+      console.log('[useHomeState] ✅ 初始化加载完成');
+    }).catch(error => {
+      console.error('[useHomeState] ❌ 初始化加载失败', error);
+    });
   }, [loadUsers, loadLimitedOffers]);
 
   return {

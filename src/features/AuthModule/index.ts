@@ -69,9 +69,7 @@ export type {
 // #endregion
 
 // #region 配置
-export {
-    PROTECTED_ROUTES, PUBLIC_ROUTES, ROUTE_WHITELIST_CONFIG, SEMI_PUBLIC_ROUTES, TAB_ACCESS_CONTROL, canAccessAnonymously, getTabLoginPrompt, isPublicRoute, routeGuard, tabRequiresAuth
-} from './config';
+export { canAccessAnonymously, getTabLoginPrompt, isPublicRoute, PROTECTED_ROUTES, PUBLIC_ROUTES, ROUTE_WHITELIST_CONFIG, routeGuard, SEMI_PUBLIC_ROUTES, TAB_ACCESS_CONTROL, tabRequiresAuth } from './config';
 
 // #endregion
 

@@ -1,15 +1,24 @@
 /**
  * Discover Tab - 发现页面
+ * 
+ * 功能：
+ * - 集成发现页面主组件（MainPage）
+ * - 提供三Tab切换（关注/热门/同城）
+ * - 支持动态流展示、下拉刷新和无限滚动
  */
 
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
+
+// 导入发现页面主组件
+import MainPage from '@/src/features/Discovery/MainPage';
 
 export default function DiscoverScreen() {
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>发现</Text>
-      <Text style={styles.subtitle}>发现页面开发中...</Text>
+      <MainPage 
+        initialTab="hot" // 默认显示热门Tab
+      />
     </View>
   );
 }
@@ -17,18 +26,5 @@ export default function DiscoverScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#1F2937',
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: '#6B7280',
   },
 });

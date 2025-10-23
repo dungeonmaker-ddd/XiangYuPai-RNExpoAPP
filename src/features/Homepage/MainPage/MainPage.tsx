@@ -23,7 +23,7 @@
 
 // #region 2. Imports
 import { useRouter } from 'expo-router';
-import React, { useCallback, useMemo } from 'react';
+import React, { useCallback, useEffect, useMemo } from 'react';
 import {
   ImageBackground,
   StatusBar,
@@ -50,9 +50,6 @@ import {
 
 // 状态管理Hooks
 import { useHomeState } from './useHomeState';
-
-// TODO: API集成（后续）
-// import * as homepageApi from '../../api/homepageApi';
 // #endregion
 
 // #region 3. Types & Schema
@@ -109,6 +106,14 @@ const formatRelativeTime = (timestamp: number): string => {
 const useMainPageLogic = (props: MainPageProps) => {
   const router = useRouter();
   
+  // 组件挂载日志
+  useEffect(() => {
+    console.log('[MainPage] 🎬 组件已挂载', {
+      initialFilter: props.initialFilter,
+      initialRegion: props.initialRegion,
+    });
+  }, [props.initialFilter, props.initialRegion]);
+  
   // 使用状态管理Hook
   const {
     searchQuery,
@@ -130,6 +135,7 @@ const useMainPageLogic = (props: MainPageProps) => {
    * 位置选择处理
    */
   const handleLocationPress = useCallback(() => {
+    console.log('[MainPage] 🧭 导航: 首页 → 位置选择');
     router.push('/(tabs)/homepage/location');
   }, [router]);
   
@@ -137,6 +143,7 @@ const useMainPageLogic = (props: MainPageProps) => {
    * 搜索页面跳转
    */
   const handleSearchPress = useCallback(() => {
+    console.log('[MainPage] 🧭 导航: 首页 → 搜索页面');
     router.push('/(tabs)/homepage/search');
   }, [router]);
   
@@ -164,6 +171,7 @@ const useMainPageLogic = (props: MainPageProps) => {
    * 用户点击处理
    */
   const handleUserPress = useCallback((user: UserCard) => {
+    console.log('[MainPage] 🧭 导航: 首页 → 用户详情', { userId: user.id, username: user.username });
     router.push({
       pathname: '/modal/user-detail',
       params: { userId: user.id },

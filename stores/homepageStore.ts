@@ -1,10 +1,14 @@
 /**
  * Homepage Store - 首页状态管理
  * 使用Zustand实现首页相关状态管理
+ * 
+ * 版本: v2.0 - 集成真实后端API + 完善日志
+ * 更新: 2025-10-22
  */
 
 import { create } from 'zustand';
 import { devtools, persist } from 'zustand/middleware';
+import { homepageApiEnhanced } from '../services/api/homepageApiEnhanced';
 import { createSafeStorage } from './storage-config';
 
 // 页面配置类型
@@ -134,156 +138,181 @@ export const useHomepageStore = create<HomepageState>()(
       (set, get) => ({
         ...initialState,
 
-        // 加载页面配置
+        // 加载页面配置（集成真实API）
         loadPageConfig: async () => {
           const { setLoading, setError } = get();
+          const startTime = Date.now();
           
           try {
+            console.log('[HomepageStore] 🔄 开始加载页面配置');
             setLoading('pageConfig', true);
             setError('pageConfig', null);
             
-            // TODO: 替换为实际API调用
-            const mockConfig: PageConfig = {
+            // 🆕 调用真实API（支持降级）
+            const response = await homepageApiEnhanced.getHomepageConfig();
+            
+            if (!response.success) {
+              throw new Error(response.message || '配置加载失败');
+            }
+            
+            // 转换API数据格式为Store格式
+            const apiConfig = response.data;
+            const pageConfig: PageConfig = {
               topFunction: {
-                enabled: true,
+                enabled: apiConfig.topFunction.enabled,
                 config: {
-                  showLocation: true,
-                  showSearch: true,
+                  showLocation: apiConfig.topFunction.showLocation,
+                  showSearch: apiConfig.topFunction.showSearch,
                 },
               },
               gameBanner: {
-                enabled: true,
+                enabled: apiConfig.gameBanner.enabled,
                 config: {
-                  autoPlay: true,
-                  interval: 5000,
+                  autoPlay: apiConfig.gameBanner.autoPlay,
+                  interval: apiConfig.gameBanner.interval,
                 },
               },
               serviceGrid: {
-                enabled: true,
+                enabled: apiConfig.serviceGrid.enabled,
                 config: {
-                  columns: 5,
-                  rows: 2,
+                  columns: apiConfig.serviceGrid.columns,
+                  rows: apiConfig.serviceGrid.rows,
                 },
               },
               featuredUsers: {
-                enabled: true,
+                enabled: apiConfig.featuredUsers.enabled,
                 config: {
-                  maxCount: 10,
-                  refreshInterval: 30000,
+                  maxCount: apiConfig.featuredUsers.maxCount,
+                  refreshInterval: apiConfig.featuredUsers.refreshInterval,
                 },
               },
               eventCenter: {
-                enabled: true,
+                enabled: apiConfig.eventCenter.enabled,
                 config: {
-                  showPromo: true,
+                  showPromo: apiConfig.eventCenter.showPromo,
                 },
               },
               userList: {
-                enabled: true,
+                enabled: apiConfig.userList.enabled,
                 config: {
-                  pageSize: 20,
-                  infiniteScroll: true,
+                  pageSize: apiConfig.userList.pageSize,
+                  infiniteScroll: apiConfig.userList.infiniteScroll,
                 },
               },
             };
             
-            // 模拟API延迟
-            await new Promise(resolve => setTimeout(resolve, 500));
-            
-            set({ pageConfig: mockConfig });
+            set({ pageConfig });
+            console.log('[HomepageStore] ✅ 页面配置加载成功', {
+              areas: Object.keys(pageConfig).length,
+              duration: Date.now() - startTime + 'ms',
+            });
           } catch (error) {
-            setError('pageConfig', error instanceof Error ? error.message : '配置加载失败');
+            const errorMsg = error instanceof Error ? error.message : '配置加载失败';
+            setError('pageConfig', errorMsg);
+            console.error('[HomepageStore] ❌ 页面配置加载失败', error);
           } finally {
             setLoading('pageConfig', false);
           }
         },
 
-        // 加载页面数据
+        // 加载页面数据（集成真实API）
         loadPageData: async () => {
           const { setLoading, setError } = get();
+          const startTime = Date.now();
           
           try {
+            console.log('[HomepageStore] 🔄 开始加载页面数据');
             setLoading('pageData', true);
             setError('pageData', null);
             
-            // TODO: 替换为实际API调用
-            const mockData: PageData = {
-              featuredUsers: [
-                {
-                  id: '1',
-                  name: '游戏大神',
-                  avatar: 'https://example.com/avatar1.jpg',
-                  tags: ['王者荣耀', '高端局'],
-                  price: 50,
-                  rating: 4.8,
-                },
-                {
-                  id: '2',
-                  name: '陪玩小姐姐',
-                  avatar: 'https://example.com/avatar2.jpg',
-                  tags: ['英雄联盟', '温柔'],
-                  price: 30,
-                  rating: 4.9,
-                },
-              ],
-              serviceItems: [
-                { id: '1', name: '王者荣耀', icon: 'game-controller', type: 'honor_of_kings', enabled: true },
-                { id: '2', name: '英雄联盟', icon: 'sword', type: 'league_of_legends', enabled: true },
-                { id: '3', name: '探店', icon: 'store', type: 'explore_shop', enabled: true },
-                { id: '4', name: 'K歌', icon: 'music', type: 'ktv', enabled: true },
-                { id: '5', name: '台球', icon: 'pool', type: 'billiards', enabled: true },
-              ],
-              bannerData: {
-                id: '1',
-                image: 'https://example.com/banner.jpg',
-                title: '王者荣耀',
-                subtitle: '新赛季开启',
-                gameId: 'honor_of_kings',
-              },
+            // 🆕 并行加载服务配置和横幅数据
+            const [servicesRes, bannerRes] = await Promise.allSettled([
+              homepageApiEnhanced.getServiceItems(),
+              homepageApiEnhanced.getBannerData(),
+            ]);
+            
+            // 构建页面数据
+            const pageData: PageData = {
+              featuredUsers: [], // 精选用户单独加载
+              serviceItems: servicesRes.status === 'fulfilled' && servicesRes.value.success
+                ? servicesRes.value.data
+                : [],
+              bannerData: bannerRes.status === 'fulfilled' && bannerRes.value.success
+                ? bannerRes.value.data[0]
+                : {
+                    id: '1',
+                    image: '',
+                    title: '游戏推广',
+                    subtitle: '精彩内容',
+                    gameId: 'default',
+                  },
             };
             
-            // 模拟API延迟
-            await new Promise(resolve => setTimeout(resolve, 800));
-            
-            set({ pageData: mockData });
+            set({ pageData });
+            console.log('[HomepageStore] ✅ 页面数据加载成功', {
+              services: pageData.serviceItems.length,
+              banner: pageData.bannerData.id,
+              duration: Date.now() - startTime + 'ms',
+            });
           } catch (error) {
-            setError('pageData', error instanceof Error ? error.message : '数据加载失败');
+            const errorMsg = error instanceof Error ? error.message : '数据加载失败';
+            setError('pageData', errorMsg);
+            console.error('[HomepageStore] ❌ 页面数据加载失败', error);
           } finally {
             setLoading('pageData', false);
           }
         },
 
-        // 加载精选用户
+        // 加载精选用户（集成真实API）
         loadFeaturedUsers: async () => {
           const { setLoading, setError } = get();
+          const startTime = Date.now();
           
           try {
+            console.log('[HomepageStore] 🔄 开始加载精选用户');
             setLoading('featuredUsers', true);
             setError('featuredUsers', null);
             
-            // TODO: 替换为实际API调用
-            const mockUsers = [
-              {
-                id: '3',
-                name: '技术大佬',
-                avatar: 'https://example.com/avatar3.jpg',
-                tags: ['和平精英', '专业'],
-                price: 80,
-                rating: 5.0,
-              },
-            ];
+            // 🆕 调用真实API
+            const response = await homepageApiEnhanced.getFeaturedUsers({
+              limit: 10,
+              refresh: false, // 使用缓存
+            });
             
-            // 模拟API延迟
-            await new Promise(resolve => setTimeout(resolve, 600));
+            if (!response.success) {
+              throw new Error(response.message || '精选用户加载失败');
+            }
+            
+            // 转换为PageData格式
+            const featuredUsers = response.data.map(user => ({
+              id: user.id,
+              name: user.username,
+              avatar: user.avatar,
+              tags: user.services || [],
+              price: user.price ? parseFloat(user.price.replace(/[^\d.]/g, '')) : 0,
+              rating: user.rating || 0,
+            }));
             
             set(state => ({
               pageData: state.pageData ? {
                 ...state.pageData,
-                featuredUsers: [...state.pageData.featuredUsers, ...mockUsers],
+                featuredUsers,
               } : null,
             }));
+            
+            console.log('[HomepageStore] ✅ 精选用户加载成功', { count: featuredUsers.length, duration: Date.now() - startTime + 'ms' });
           } catch (error) {
-            setError('featuredUsers', error instanceof Error ? error.message : '精选用户加载失败');
+            const errorMsg = error instanceof Error ? error.message : '精选用户加载失败';
+            setError('featuredUsers', errorMsg);
+            console.error('[HomepageStore] ❌ 精选用户加载失败', error);
+            
+            // 错误时保持空数组，前端会显示空状态
+            set(state => ({
+              pageData: state.pageData ? {
+                ...state.pageData,
+                featuredUsers: [],
+              } : null,
+            }));
           } finally {
             setLoading('featuredUsers', false);
           }
@@ -311,6 +340,7 @@ export const useHomepageStore = create<HomepageState>()(
 
         // 重置页面状态
         resetPageState: () => {
+          console.log('[HomepageStore] 🔄 重置页面状态');
           set(initialState);
         },
 
@@ -343,7 +373,10 @@ export const useHomepageStore = create<HomepageState>()(
         }),
         onRehydrateStorage: () => (state) => {
           if (state) {
-            console.log('[HomepageStore] 存储恢复成功');
+            console.log('[HomepageStore] 💾 Store从持久化存储恢复成功', {
+              hasConfig: !!state.pageConfig,
+              interaction: state.userInteraction,
+            });
           }
         },
       }

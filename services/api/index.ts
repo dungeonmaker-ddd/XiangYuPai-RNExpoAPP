@@ -2,19 +2,37 @@
  * API Services Index - 统一导出所有API服务
  */
 
+// 导入用于工具函数
+import { apiClient as client } from './client';
+import { homepageApi as homepage } from './homepageApi';
+import { locationApi as location } from './locationApi';
+import { serviceApi as service } from './serviceApi';
+import { userApi as user } from './userApi';
+
 // 导出API客户端和基础配置
 export { apiClient } from './client';
 export { API_CONFIG, API_ENDPOINTS, buildQueryParams, buildURL, getBaseURL } from './config';
 
 // 导出所有API服务实例
+export { authApi } from './authApi';
+export { discoveryApi } from './discoveryApi';
 export { homepageApi } from './homepageApi';
 export { locationApi } from './locationApi';
+export { profileApi } from './profileApi';
 export { serviceApi } from './serviceApi';
 export { userApi } from './userApi';
 
 // 导出API响应和错误类型
 export { ERROR_TYPES, HTTP_STATUS } from './client';
 export type { ApiError, ApiResponse, RequestConfig } from './client';
+
+// 导出Auth API类型
+export type {
+  LoginResponse, LogoutRequest, PasswordLoginRequest,
+  RefreshTokenRequest, RefreshTokenResponse,
+  SendSmsRequest, SendSmsResponse,
+  SmsLoginRequest, VerifySmsRequest
+} from './authApi';
 
 // 导出Homepage API类型
 export type {
@@ -40,19 +58,35 @@ export type {
   ServiceUserFilters
 } from './serviceApi';
 
+// 导出Discovery API类型
+export type {
+  AddCommentRequest, CommentItem, CommentListParams, FeedDetail, FeedListItem, FeedListParams, FeedListResponse, InteractionRequest
+} from './discoveryApi';
+
+// 导出Profile API类型
+export type {
+  OccupationDictVO,
+  ProfileCompletenessVO,
+  UserOccupationUpdateDTO,
+  UserOccupationVO,
+  UserProfileUpdateDTO,
+  UserProfileVO,
+  UserStatsVO
+} from './profileApi';
+
 // API工具函数
 export const clearAllCache = () => {
-  apiClient.clearCache();
+  client.clearCache();
 };
 
 // 设置全局认证token
 export const setAuthToken = (token: string) => {
-  apiClient.setAuthToken(token);
+  client.setAuthToken(token);
 };
 
 // 清除全局认证token
 export const clearAuthToken = () => {
-  apiClient.clearAuthToken();
+  client.clearAuthToken();
 };
 
 // 批量初始化API数据
@@ -60,9 +94,9 @@ export const initializeApiData = async () => {
   try {
     // 并行初始化基础数据
     const [homepageConfig, serviceTypes, cityList] = await Promise.allSettled([
-      homepageApi.getHomepageConfig(),
-      serviceApi.getServiceTypes(),
-      locationApi.getCityList(),
+      homepage.getHomepageConfig(),
+      service.getServiceTypes(),
+      location.getCityList(),
     ]);
 
     console.log('API数据初始化完成');
@@ -94,10 +128,10 @@ export const checkApiHealth = async (): Promise<{
   try {
     // 并行检查各个服务
     const checks = await Promise.allSettled([
-      homepageApi.getHomepageConfig().then(() => { services.homepage = true; }),
-      userApi.getUserList({ limit: 1 }).then(() => { services.user = true; }),
-      locationApi.getCityList().then(() => { services.location = true; }),
-      serviceApi.getServiceTypes().then(() => { services.service = true; }),
+      homepage.getHomepageConfig().then(() => { services.homepage = true; }),
+      user.getUserList({ limit: 1 }).then(() => { services.user = true; }),
+      location.getCityList().then(() => { services.location = true; }),
+      service.getServiceTypes().then(() => { services.service = true; }),
     ]);
 
     const healthyServices = Object.values(services).filter(Boolean).length;
