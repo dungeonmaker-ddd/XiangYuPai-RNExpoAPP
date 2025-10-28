@@ -4,6 +4,7 @@
  */
 
 import { API_CONFIG, ERROR_TYPES, HTTP_STATUS, REQUEST_HEADERS, getBaseURL } from './config';
+import { WhitelistType, checkWhitelist } from './whitelist';
 
 // 请求配置接口
 interface RequestConfig {
@@ -203,24 +204,97 @@ class ApiClient {
     }
   }
   
-  // 🎯 处理401未授权错误（自动刷新token）
+  // 🎯 处理401未授权错误（智能处理：白名单 vs 需要登录）
   private async handleUnauthorized<T>(
     url: string,
     config: RequestConfig,
     body?: any
   ): Promise<ApiResponse<T>> {
-    if (!this.authStoreGetter) {
-      throw createError(
-        ERROR_TYPES.AUTHENTICATION_ERROR, 
-        '未授权，请登录'
+    // 🎯 检查白名单
+    const whitelistCheck = checkWhitelist(url);
+    
+    console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('🔄 [第三层] 检测到401错误 - 智能处理');
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log(`   请求URL: ${url}`);
+    console.log(`   白名单类型: ${whitelistCheck.type}`);
+    console.log(`   规则: ${whitelistCheck.rule?.description || '默认（需要登录）'}`);
+    
+    // 🌐 情况1：匿名访问 - 不触发登录，抛出特殊错误
+    if (whitelistCheck.type === WhitelistType.ANONYMOUS) {
+      console.log('   处理: 🌐 匿名接口，允许降级方案');
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+      
+      const error: any = createError(
+        ERROR_TYPES.AUTHENTICATION_ERROR,
+        '该接口暂时无法访问，使用降级数据',
+        401
       );
+      error.canUseFallback = true; // 标记可以使用降级方案
+      error.whitelistType = WhitelistType.ANONYMOUS;
+      throw error;
+    }
+    
+    // 🔓 情况2：可选认证 - 尝试刷新token，失败也不强制登录
+    if (whitelistCheck.type === WhitelistType.OPTIONAL_AUTH) {
+      console.log('   处理: 🔓 可选认证，尝试刷新token（失败可降级）');
+      
+      if (!this.authStoreGetter) {
+        console.log('   结果: ⚠️ 无AuthStore，使用降级方案');
+        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+        
+        const error: any = createError(
+          ERROR_TYPES.AUTHENTICATION_ERROR,
+          '未登录，使用访客模式',
+          401
+        );
+        error.canUseFallback = true;
+        error.whitelistType = WhitelistType.OPTIONAL_AUTH;
+        throw error;
+      }
+      
+      try {
+        const authActions = this.authStoreGetter.getState();
+        await authActions.refreshAuthToken();
+        const newToken = this.getAuthToken();
+        
+        if (newToken) {
+          this.setAuthToken(newToken);
+          console.log('   结果: ✅ Token刷新成功，重试请求');
+          console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+          return await this.makeRequest<T>(url, { ...config, retry: false }, body);
+        }
+      } catch (refreshError) {
+        console.log('   结果: ⚠️ Token刷新失败，使用降级方案');
+        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+        
+        const error: any = createError(
+          ERROR_TYPES.AUTHENTICATION_ERROR,
+          '认证失败，使用访客模式',
+          401
+        );
+        error.canUseFallback = true;
+        error.whitelistType = WhitelistType.OPTIONAL_AUTH;
+        throw error;
+      }
+    }
+    
+    // 🔒 情况3：必须认证 - 尝试刷新token，失败则引导登录
+    console.log('   处理: 🔒 需要登录，尝试刷新token');
+    
+    if (!this.authStoreGetter) {
+      console.log('   结果: ❌ 无AuthStore，需要登录');
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+      
+      const error: any = createError(
+        ERROR_TYPES.AUTHENTICATION_ERROR, 
+        '请先登录'
+      );
+      error.requireLogin = true;
+      throw error;
     }
     
     try {
-      console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-      console.log('🔄 [第三层] 检测到401错误 - 尝试刷新token');
-      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-      console.log(`   原请求: ${url}`);
       console.log('   步骤1: 调用authStore.refreshToken()');
       
       // 调用authStore的refreshToken方法
@@ -231,7 +305,7 @@ class ApiClient {
       const newToken = this.getAuthToken();
       if (newToken) {
         this.setAuthToken(newToken);
-        console.log('   ✅ Token刷新成功');
+        console.log('   结果: ✅ Token刷新成功');
         console.log(`   新Token: ${newToken.substring(0, 20)}...`);
         console.log('   步骤2: 重新发送原请求');
         console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
@@ -242,11 +316,10 @@ class ApiClient {
       
       throw new Error('Token refresh failed: no new token');
     } catch (refreshError) {
-      console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-      console.error('❌ [第三层] Token刷新失败');
+      console.log('   结果: ❌ Token刷新失败');
       console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
       console.log('   原因:', refreshError);
-      console.log('   操作: 清除认证数据，需要重新登录');
+      console.log('   操作: 清除认证数据，引导用户登录');
       console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
       
       // 刷新失败，清除认证数据
@@ -257,12 +330,14 @@ class ApiClient {
         console.error('Clear auth data error:', clearError);
       }
       
-      // 抛出认证错误（业务层可以监听并跳转登录页）
-      throw createError(
+      // 抛出需要登录的错误
+      const error: any = createError(
         ERROR_TYPES.AUTHENTICATION_ERROR,
         '登录已过期，请重新登录',
         401
       );
+      error.requireLogin = true; // 标记需要跳转登录页
+      throw error;
     }
   }
 

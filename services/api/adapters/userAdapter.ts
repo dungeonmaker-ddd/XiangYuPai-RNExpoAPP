@@ -134,9 +134,9 @@ export class UserDataAdapter {
   ): UserCard {
     return {
       // 基础信息
-      id: String(profile.userId),
+      id: profile.userId ? String(profile.userId) : `temp-${Date.now()}-${Math.random()}`,
       avatar: profile.avatar || profile.avatarThumbnail || this.getDefaultAvatar(),
-      username: profile.nickname || `用户${profile.userId}`,
+      username: profile.nickname || `用户${profile.userId || '未知'}`,
       age: profile.age || 0,
       bio: profile.bio || '这个家伙很懒惰，没有填写简介',
       

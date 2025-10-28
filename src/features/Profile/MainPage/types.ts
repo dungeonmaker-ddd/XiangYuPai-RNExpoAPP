@@ -19,7 +19,10 @@ export interface MainPageProps {
  */
 export interface BackgroundAreaProps {
   imageUrl?: string;
+  avatarUrl?: string;
   onBack: () => void;
+  onEdit?: () => void;
+  showEditButton?: boolean;
   style?: StyleProp<ViewStyle>;
 }
 

@@ -48,93 +48,98 @@ const UserInfoArea: React.FC<UserInfoAreaProps> = ({
 }) => {
   return (
     <View style={[styles.container, style]}>
-      {/* 头像区域 */}
-      <TouchableOpacity
-        style={styles.avatarContainer}
-        onPress={onAvatarPress}
-        activeOpacity={0.8}
-      >
-        <Image
-          source={userInfo.avatar ? { uri: userInfo.avatar } : DEFAULT_AVATAR}
-          style={styles.avatar}
-        />
-        {/* 在线状态指示 */}
-        {userInfo.isOnline && (
-          <View style={styles.onlineIndicator} />
-        )}
-      </TouchableOpacity>
-      
-      {/* 用户基本信息 */}
-      <View style={styles.userInfoContainer}>
-        {/* 昵称和性别年龄 */}
-        <View style={styles.nameRow}>
-          <Text style={styles.nickname} numberOfLines={1}>
-            {userInfo.nickname}
-          </Text>
-          {userInfo.gender && userInfo.age && (
-            <View
-              style={[
-                styles.genderTag,
-                {
-                  backgroundColor:
-                    userInfo.gender === 'male'
-                      ? COLORS.GENDER_MALE
-                      : COLORS.GENDER_FEMALE,
-                },
-              ]}
-            >
-              <Text style={styles.genderText}>
-                {userInfo.gender === 'male' ? '♂' : '♀'}{userInfo.age}
-              </Text>
-            </View>
-          )}
-        </View>
-        
-        {/* 认证标签组 */}
-        <View style={styles.badgeRow}>
-          {userInfo.isRealVerified && (
-            <View style={[styles.badge, styles.verifiedBadge]}>
-              <Text style={styles.badgeText}>✓ 实名认证</Text>
-            </View>
-          )}
-          {userInfo.isGodVerified && (
-            <View style={[styles.badge, styles.godBadge]}>
-              <Text style={styles.badgeText}>👑 大神</Text>
-            </View>
-          )}
-        </View>
-        
-        {/* 位置距离信息 */}
-        <View style={styles.locationRow}>
+      <View style={styles.content}>
+        {/* 头像区域 */}
+        <TouchableOpacity
+          style={styles.avatarContainer}
+          onPress={onAvatarPress}
+          activeOpacity={0.8}
+        >
+          <Image
+            source={userInfo.avatar ? { uri: userInfo.avatar } : DEFAULT_AVATAR}
+            style={styles.avatar}
+          />
+          {/* 在线状态指示 */}
           {userInfo.isOnline && (
-            <Text style={styles.onlineStatus}>🟢 在线</Text>
+            <View style={styles.onlineIndicator} />
           )}
-          {userInfo.distance !== undefined && (
-            <Text style={styles.distanceText}>
-              📍 {formatDistance(userInfo.distance)}
+        </TouchableOpacity>
+        
+        {/* 用户基本信息 */}
+        <View style={styles.userInfoContainer}>
+          {/* 昵称和性别年龄标签 */}
+          <View style={styles.nameRow}>
+            <Text style={styles.nickname} numberOfLines={1}>
+              {userInfo.nickname}
             </Text>
-          )}
+            {userInfo.gender && userInfo.age && (
+              <View
+                style={[
+                  styles.genderTag,
+                  {
+                    backgroundColor:
+                      userInfo.gender === 'male'
+                        ? COLORS.GENDER_MALE
+                        : COLORS.GENDER_FEMALE,
+                  },
+                ]}
+              >
+                <Text style={styles.genderText}>
+                  {userInfo.gender === 'male' ? '♂' : '♀'}{userInfo.age}
+                </Text>
+              </View>
+            )}
+          </View>
+          
+          {/* 认证标签和在线状态 */}
+          <View style={styles.statusRow}>
+            {userInfo.isRealVerified && (
+              <View style={[styles.badge, styles.verifiedBadge]}>
+                <Text style={styles.badgeText}>✓实名认证</Text>
+              </View>
+            )}
+            {userInfo.isGodVerified && (
+              <View style={[styles.badge, styles.godBadge]}>
+                <Text style={styles.badgeText}>🔱大神</Text>
+              </View>
+            )}
+          </View>
+          
+          {/* 在线状态和距离信息 */}
+          <View style={styles.locationRow}>
+            {userInfo.isOnline && (
+              <View style={styles.onlineTag}>
+                <View style={styles.onlineDot} />
+                <Text style={styles.onlineText}>在线</Text>
+              </View>
+            )}
+            {userInfo.distance !== undefined && (
+              <Text style={styles.distanceText}>
+                📍{formatDistance(userInfo.distance)}
+              </Text>
+            )}
+          </View>
         </View>
+        
+        {/* 编辑/关注按钮 */}
+        {isOwnProfile ? (
+          <TouchableOpacity
+            style={styles.editButton}
+            onPress={onEditPress}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.editButtonText}>编辑</Text>
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity
+            style={styles.followButton}
+            onPress={onFollowPress}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.followButtonText}>+ 关注</Text>
+          </TouchableOpacity>
+        )}
       </View>
-      
-      {/* 编辑/关注按钮 */}
-      {isOwnProfile ? (
-        <TouchableOpacity
-          style={styles.editButton}
-          onPress={onEditPress}
-          activeOpacity={0.7}
-        >
-          <Text style={styles.editButtonText}>编辑</Text>
-        </TouchableOpacity>
-      ) : (
-        <TouchableOpacity
-          style={styles.followButton}
-          onPress={onFollowPress}
-          activeOpacity={0.7}
-        >
-          <Text style={styles.followButtonText}>关注</Text>
-        </TouchableOpacity>
-      )}
     </View>
   );
 };
@@ -143,11 +148,14 @@ const UserInfoArea: React.FC<UserInfoAreaProps> = ({
 // #region 9. Exports & Styles
 const styles = StyleSheet.create({
   container: {
+    backgroundColor: COLORS.WHITE,
+    paddingBottom: 16,
+  },
+  content: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     paddingHorizontal: 16,
-    paddingVertical: 16,
-    backgroundColor: COLORS.WHITE,
+    paddingTop: 16,
   },
   avatarContainer: {
     position: 'relative',
@@ -163,19 +171,19 @@ const styles = StyleSheet.create({
   },
   onlineIndicator: {
     position: 'absolute',
-    right: 0,
-    bottom: 0,
-    width: 16,
-    height: 16,
-    borderRadius: 8,
+    right: 2,
+    bottom: 2,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
     backgroundColor: COLORS.ONLINE_GREEN,
-    borderWidth: 2,
+    borderWidth: 3,
     borderColor: COLORS.WHITE,
   },
   userInfoContainer: {
     flex: 1,
     marginLeft: 12,
-    marginTop: 0,
+    marginTop: 4,
   },
   nameRow: {
     flexDirection: 'row',
@@ -183,32 +191,32 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   nickname: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: '700',
     color: COLORS.TEXT_PRIMARY,
-    maxWidth: 200,
+    maxWidth: 180,
   },
   genderTag: {
-    marginLeft: 8,
-    paddingHorizontal: 8,
+    marginLeft: 6,
+    paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 10,
   },
   genderText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '600',
     color: COLORS.WHITE,
   },
-  badgeRow: {
+  statusRow: {
     flexDirection: 'row',
     marginBottom: 8,
     flexWrap: 'wrap',
   },
   badge: {
-    paddingHorizontal: 6,
-    paddingVertical: 4,
-    borderRadius: 12,
-    marginRight: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 11,
+    marginRight: 6,
     marginBottom: 4,
   },
   verifiedBadge: {
@@ -218,7 +226,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.GOD_PURPLE,
   },
   badgeText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '500',
     color: COLORS.WHITE,
   },
@@ -226,39 +234,52 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
-  onlineStatus: {
-    fontSize: 12,
-    color: COLORS.ONLINE_GREEN,
+  onlineTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
     marginRight: 12,
+  },
+  onlineDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: COLORS.ONLINE_GREEN,
+    marginRight: 4,
+  },
+  onlineText: {
+    fontSize: 12,
+    color: COLORS.TEXT_SECONDARY,
   },
   distanceText: {
     fontSize: 12,
     color: COLORS.TEXT_SECONDARY,
   },
   editButton: {
-    width: 80,
-    height: 36,
-    borderRadius: 18,
+    width: 70,
+    height: 32,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: COLORS.BORDER,
     backgroundColor: COLORS.WHITE,
     justifyContent: 'center',
     alignItems: 'center',
+    marginTop: 4,
   },
   editButtonText: {
-    fontSize: 14,
+    fontSize: 13,
     color: COLORS.TEXT_SECONDARY,
   },
   followButton: {
-    width: 80,
-    height: 36,
-    borderRadius: 18,
+    width: 70,
+    height: 32,
+    borderRadius: 16,
     backgroundColor: COLORS.PRIMARY,
     justifyContent: 'center',
     alignItems: 'center',
+    marginTop: 4,
   },
   followButtonText: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
     color: COLORS.WHITE,
   },

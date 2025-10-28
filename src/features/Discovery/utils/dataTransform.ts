@@ -18,6 +18,11 @@ import type { Comment, Feed } from '../types';
  * 将后端FeedListItem转换为前端Feed
  */
 export const transformFeedListItemToFeed = (item: FeedListItem): Feed => {
+  // 优先使用 author 对象，如果没有则使用扁平字段
+  const nickname = item.author?.nickname || item.userNickname || '未知用户';
+  const avatar = item.author?.avatar || item.userAvatar || '';
+  const authorUserId = item.author?.userId || item.userId;
+  
   return {
     id: item.id,
     userId: item.userId,
@@ -30,11 +35,11 @@ export const transformFeedListItemToFeed = (item: FeedListItem): Feed => {
     content: item.summary || item.title, // 列表使用summary
     coverImage: item.coverImage,
     
-    // 用户信息（从冗余字段构建）
+    // 用户信息（优先从author对象获取）
     userInfo: {
-      id: item.userId,
-      nickname: item.userNickname,
-      avatar: item.userAvatar || '',
+      id: authorUserId,
+      nickname: nickname,
+      avatar: avatar,
       isFollowed: false, // TODO: 需要从用户关系服务获取
       tags: [], // TODO: 需要从用户服务获取
     },
@@ -69,16 +74,16 @@ export const transformFeedListItemToFeed = (item: FeedListItem): Feed => {
       distance: item.distance ? item.distance * 1000 : undefined, // km → m
     } : undefined,
     
-    // 统计数据
-    likeCount: item.likeCount,
-    commentCount: item.commentCount,
-    shareCount: item.shareCount,
-    collectCount: item.collectCount,
-    viewCount: item.viewCount,
+    // 统计数据（确保是数字类型）
+    likeCount: Number(item.likeCount) || 0,
+    commentCount: Number(item.commentCount) || 0,
+    shareCount: Number(item.shareCount) || 0,
+    collectCount: Number(item.collectCount) || 0,
+    viewCount: Number(item.viewCount) || 0,
     
-    // 用户互动状态
-    isLiked: item.isLiked,
-    isCollected: item.isCollected,
+    // 用户互动状态（后端可能返回 liked/collected 或 isLiked/isCollected）
+    isLiked: (item as any).liked ?? item.isLiked ?? false,
+    isCollected: (item as any).collected ?? item.isCollected ?? false,
     
     // 时间戳
     createdAt: parseBackendDateTime(item.createdAt),

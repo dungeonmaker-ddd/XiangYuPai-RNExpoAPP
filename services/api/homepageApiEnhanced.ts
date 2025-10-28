@@ -166,7 +166,7 @@ interface TableDataInfo<T> {
   total: number;
 }
 
-// ===== Homepage API Enhanced类 =====
+// ===== Homepage API Enhanced =====
 
 class HomepageAPIEnhanced {
   /**
@@ -224,13 +224,13 @@ class HomepageAPIEnhanced {
         pageSize: params.pageSize || 20,
       });
       
-      const response = await apiClient.get<RuoYiResponse<UserProfileVO[]>>(
+      const response = await apiClient.get<UserProfileVO[]>(
         `${API_ENDPOINTS.HOMEPAGE.NEARBY_USERS}?${queryParams}`
       );
       
       // 转换数据格式
       const users = UserDataAdapter.transformUserList(
-        response.data.data,
+        response.data,
         { latitude: params.latitude, longitude: params.longitude }
       );
       
@@ -242,10 +242,10 @@ class HomepageAPIEnhanced {
           pageSize: params.pageSize || 20,
           hasMore: users.length >= (params.pageSize || 20),
         },
-        code: response.data.code,
-        message: response.data.msg,
+        code: response.code,
+        message: response.message,
         timestamp: Date.now(),
-        success: response.data.code === 200,
+        success: response.success,
       };
     } catch (error: any) {
       // 如果首页接口未实现，降级使用内容模块的nearby接口
@@ -281,7 +281,7 @@ class HomepageAPIEnhanced {
     
     return {
       data: {
-        users: [],  // 临时空数据
+        users: [],  // 临时空数组
         total: response.data.total || 0,
         pageNum: params.page || 1,
         pageSize: params.pageSize || 20,
@@ -294,56 +294,6 @@ class HomepageAPIEnhanced {
     };
   }
   
-  /**
-   * 🆕 推荐用户
-   */
-  private async getRecommendedUsers(params: UserListParams): Promise<ApiResponse<UserListResponse>> {
-    try {
-      const queryParams = buildQueryParams({
-        type: null,
-        limit: params.limit || 20,
-        pageNum: params.page || 1,
-        pageSize: params.pageSize || 20,
-      });
-      
-      // 使用内容推荐接口
-      const response = await apiClient.get<TableDataInfo<any>>(
-        `${API_ENDPOINTS.CONTENT.RECOMMENDED}?${queryParams}`
-      );
-      
-      // TODO: 转换content数据为用户数据
-      
-      return {
-        data: {
-          users: [],
-          total: response.data.total || 0,
-          pageNum: params.page || 1,
-          pageSize: params.pageSize || 20,
-          hasMore: false,
-        },
-        code: 200,
-        message: 'success',
-        timestamp: Date.now(),
-        success: true,
-      };
-    } catch (error) {
-      console.error('[HomepageAPI] getRecommendedUsers error:', error);
-      // 降级为通用列表
-      return this.getGenericUserList(params);
-    }
-  }
-  
-  /**
-   * 🆕 最新用户
-   */
-  private async getLatestUsers(params: UserListParams): Promise<ApiResponse<UserListResponse>> {
-    // 使用通用接口，按创建时间倒序
-    return this.getGenericUserList({
-      ...params,
-      sortBy: 'newest',
-      sortOrder: 'desc',
-    });
-  }
   
   /**
    * 🆕 通用用户列表（使用UserController）
@@ -358,29 +308,28 @@ class HomepageAPIEnhanced {
         pageSize: params.limit || params.pageSize || 20,
       });
       
-      // 调用用户列表接口
-      const response = await apiClient.get<RuoYiResponse<UserProfileVO[]>>(
-        `${API_ENDPOINTS.USER.LIST}?${queryParams}`
+      // 🆕 调用首页推荐接口（公开，无需登录）
+      const response = await apiClient.get<UserProfileVO[]>(
+        `${API_ENDPOINTS.HOMEPAGE.RECOMMENDED_USERS}?${queryParams}`
       );
       
       // 🔍 调试：查看完整响应
       console.log('[HomepageAPI] 后端响应数据结构:', {
         hasData: !!response.data,
-        hasDataData: !!(response.data && response.data.data),
-        code: response.data?.code,
-        msg: response.data?.msg,
-        dataType: typeof response.data?.data,
-        dataLength: Array.isArray(response.data?.data) ? response.data.data.length : 'not-array',
+        code: response.code,
+        message: response.message,
+        dataType: typeof response.data,
+        dataLength: Array.isArray(response.data) ? response.data.length : 'not-array',
       });
       
-      // 🆕 添加空值检查
-      if (!response.data || !response.data.data || !Array.isArray(response.data.data)) {
-        console.warn('[HomepageAPI] 后端返回数据格式异常', response.data);
-        throw new Error('后端返回数据格式错误：data.data不是数组');
+      // 🆕 添加空值检查（client.ts已提取data字段）
+      if (!response.data || !Array.isArray(response.data)) {
+        console.warn('[HomepageAPI] 后端返回数据格式异常', response);
+        throw new Error('后端返回数据格式错误：data不是数组');
       }
       
-      // 转换数据
-      const users = UserDataAdapter.transformUserList(response.data.data);
+      // 转换数据（response.data已经是数组）
+      const users = UserDataAdapter.transformUserList(response.data);
       
       return {
         data: {
@@ -390,10 +339,10 @@ class HomepageAPIEnhanced {
           pageSize: params.pageSize || 20,
           hasMore: users.length >= (params.pageSize || 20),
         },
-        code: response.data.code,
-        message: response.data.msg,
+        code: response.code,
+        message: response.message,
         timestamp: Date.now(),
-        success: response.data.code === 200,
+        success: response.success,
       };
     } catch (error) {
       console.error('[HomepageAPI] getGenericUserList error:', error);
@@ -419,33 +368,34 @@ class HomepageAPIEnhanced {
           cityId: params?.cityId,
         });
         
-        const response = await apiClient.get<RuoYiResponse<UserProfileVO[]>>(
+        const response = await apiClient.get<UserProfileVO[]>(
           `${API_ENDPOINTS.HOMEPAGE.FEATURED_USERS}?${queryParams}`,
           { cache: !params?.refresh }
         );
         
         // 🔍 调试：查看响应结构
-        console.log('[HomepageAPI] 精选用户响应:', {
+        console.log('[HomepageAPI] 精选用户响应', {
           hasData: !!response.data,
-          hasDataData: !!(response.data && response.data.data),
-          code: response.data?.code,
-          dataType: typeof response.data?.data,
+          code: response.code,
+          message: response.message,
+          dataType: typeof response.data,
+          dataLength: Array.isArray(response.data) ? response.data.length : 'not-array',
         });
         
         // 🆕 添加空值检查
-        if (!response.data || !response.data.data || !Array.isArray(response.data.data)) {
+        if (!response.data || !Array.isArray(response.data)) {
           console.warn('[HomepageAPI] 精选用户数据格式异常，使用降级方案');
           return this.getFeaturedUsersFallback(params);
         }
         
-        const users = UserDataAdapter.transformUserList(response.data.data);
+        const users = UserDataAdapter.transformUserList(response.data);
         
         return {
           data: users,
-          code: response.data.code,
-          message: response.data.msg,
+          code: response.code,
+          message: response.message,
           timestamp: Date.now(),
-          success: response.data.code === 200,
+          success: response.success,
         };
       } catch (error: any) {
         // 接口未实现，使用降级方案
@@ -469,25 +419,26 @@ class HomepageAPIEnhanced {
     serviceType?: string;
     cityId?: number;
   }): Promise<ApiResponse<FeaturedUser[]>> {
-    // 使用通用用户列表接口，前端过滤优质用户
+    // 🆕 使用首页推荐接口（公开，无需登录）
     const queryParams = buildQueryParams({
-      status: 1,
-      limit: (params?.limit || 10) * 3, // 多查询一些，前端过滤
+      limit: (params?.limit || 10) * 2, // 多查询一些，前端过滤
     });
     
-    const response = await apiClient.get<RuoYiResponse<UserProfileVO[]>>(
-      `${API_ENDPOINTS.USER.LIST}?${queryParams}`
+    const response = await apiClient.get<UserProfileVO[]>(
+      `${API_ENDPOINTS.HOMEPAGE.RECOMMENDED_USERS}?${queryParams}`
     );
     
     // 🔍 调试：查看响应
     console.log('[HomepageAPI] 降级方案响应:', {
       hasData: !!response.data,
-      hasDataData: !!(response.data && response.data.data),
-      dataType: typeof response.data?.data,
+      code: response.code,
+      message: response.message,
+      dataType: typeof response.data,
+      dataLength: Array.isArray(response.data) ? response.data.length : 'not-array',
     });
     
     // 🆕 添加空值检查
-    if (!response.data || !response.data.data || !Array.isArray(response.data.data)) {
+    if (!response.data || !Array.isArray(response.data)) {
       console.warn('[HomepageAPI] 降级方案数据异常，返回空数组');
       return {
         data: [],
@@ -499,7 +450,7 @@ class HomepageAPIEnhanced {
     }
     
     // 前端过滤优质用户
-    const filtered = UserDataAdapter.filterFeaturedUsers(response.data.data);
+    const filtered = UserDataAdapter.filterFeaturedUsers(response.data);
     const sorted = UserDataAdapter.sortUsers(filtered, 'rating');
     const limited = sorted.slice(0, params?.limit || 10);
     
@@ -522,16 +473,16 @@ class HomepageAPIEnhanced {
   async getHomepageConfig(params?: any): Promise<ApiResponse<HomepageConfig>> {
     try {
       // 尝试从后端获取配置
-      const response = await apiClient.get<RuoYiResponse<HomepageConfig>>(
+      const response = await apiClient.get<HomepageConfig>(
         API_ENDPOINTS.HOMEPAGE.CONFIG
       );
       
       return {
-        data: response.data.data,
-        code: response.data.code,
-        message: response.data.msg,
+        data: response.data,
+        code: response.code,
+        message: response.message,
         timestamp: Date.now(),
-        success: response.data.code === 200,
+        success: response.success,
       };
     } catch (error: any) {
       // 后端接口未实现，使用默认配置
@@ -593,16 +544,16 @@ class HomepageAPIEnhanced {
    */
   async getServiceItems(params?: any): Promise<ApiResponse<ServiceItem[]>> {
     try {
-      const response = await apiClient.get<RuoYiResponse<ServiceItem[]>>(
+      const response = await apiClient.get<ServiceItem[]>(
         API_ENDPOINTS.HOMEPAGE.SERVICES
       );
       
       return {
-        data: response.data.data,
-        code: response.data.code,
-        message: response.data.msg,
+        data: response.data,
+        code: response.code,
+        message: response.message,
         timestamp: Date.now(),
-        success: response.data.code === 200,
+        success: response.success,
       };
     } catch (error: any) {
       // 降级为本地配置
@@ -719,13 +670,13 @@ class HomepageAPIEnhanced {
       },
       {
         id: '8',
-        name: 'K歌',
+        name: 'K',
         icon: 'mic',
         type: 'ktv',
         enabled: true,
         sortOrder: 8,
         config: {
-          displayName: 'K歌',
+          displayName: 'K',
           description: 'KTV陪唱',
           iconUrl: '',
           backgroundColor: '#FFD700',
@@ -821,16 +772,16 @@ class HomepageAPIEnhanced {
    */
   async getBannerData(): Promise<ApiResponse<BannerData[]>> {
     try {
-      const response = await apiClient.get<RuoYiResponse<BannerData[]>>(
+      const response = await apiClient.get<BannerData[]>(
         API_ENDPOINTS.HOMEPAGE.BANNER
       );
       
       return {
-        data: response.data.data,
-        code: response.data.code,
-        message: response.data.msg,
+        data: response.data,
+        code: response.code,
+        message: response.message,
         timestamp: Date.now(),
-        success: response.data.code === 200,
+        success: response.success,
       };
     } catch (error: any) {
       // 降级为默认横幅
@@ -849,7 +800,7 @@ class HomepageAPIEnhanced {
       {
         id: '1',
         title: '王者荣耀',
-        subtitle: '新赛季开启',
+        subtitle: '新赛季开',
         image: 'https://via.placeholder.com/800x400?text=Honor+of+Kings',
         gameId: 'honor_of_kings',
         actionType: 'navigate',
@@ -930,18 +881,18 @@ class HomepageAPIEnhanced {
     extra?: Record<string, any>;
   }): Promise<ApiResponse<{ success: boolean }>> {
     try {
-      const response = await apiClient.post<RuoYiResponse<{ success: boolean }>>(
+      const response = await apiClient.post<{ success: boolean }>(
         API_ENDPOINTS.ANALYTICS.EVENTS,
         event,
         { retry: false } // 埋点失败不重试
       );
       
       return {
-        data: response.data.data,
-        code: response.data.code,
-        message: response.data.msg,
+        data: response.data,
+        code: response.code,
+        message: response.message,
         timestamp: Date.now(),
-        success: response.data.code === 200,
+        success: response.success,
       };
     } catch (error) {
       // 埋点失败静默处理
@@ -961,22 +912,22 @@ class HomepageAPIEnhanced {
    */
   async getHotSearchKeywords(): Promise<ApiResponse<string[]>> {
     try {
-      const response = await apiClient.get<RuoYiResponse<string[]>>(
+      const response = await apiClient.get<string[]>(
         API_ENDPOINTS.HOMEPAGE.HOT_KEYWORDS
       );
       
       return {
-        data: response.data.data,
-        code: response.data.code,
-        message: response.data.msg,
+        data: response.data,
+        code: response.code,
+        message: response.message,
         timestamp: Date.now(),
-        success: response.data.code === 200,
+        success: response.success,
       };
     } catch (error: any) {
       // 降级为默认关键词
       if (error?.response?.status === 404) {
         return {
-          data: ['王者荣耀', '英雄联盟', '探店', 'K歌', '私影'],
+          data: ['王者荣耀', '英雄联盟', '探店', 'K', '私影'],
           code: 200,
           message: 'Using default keywords',
           timestamp: Date.now(),
@@ -998,16 +949,16 @@ class HomepageAPIEnhanced {
     averageRating: number;
   }>> {
     try {
-      const response = await apiClient.get<RuoYiResponse<any>>(
+      const response = await apiClient.get<any>(
         API_ENDPOINTS.HOMEPAGE.STATISTICS
       );
       
       return {
-        data: response.data.data,
-        code: response.data.code,
-        message: response.data.msg,
+        data: response.data,
+        code: response.code,
+        message: response.message,
         timestamp: Date.now(),
-        success: response.data.code === 200,
+        success: response.success,
       };
     } catch (error: any) {
       // 降级为默认统计
@@ -1047,10 +998,4 @@ export const homepageApiEnhanced = new HomepageAPIEnhanced();
 
 // 默认导出（向后兼容）
 export default homepageApiEnhanced;
-
-// 导出类型
-export type {
-  BannerData, FeaturedUser, HomepageConfig, HomepageData, ServiceItem, UserListParams,
-  UserListResponse
-};
 

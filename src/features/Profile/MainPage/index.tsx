@@ -34,6 +34,7 @@ import {
 } from 'react-native';
 
 // Store
+import { useAuthStore } from '@/src/features/AuthModule/stores/authStore';
 import { useProfileStore } from '@/stores/profileStore';
 
 // 类型和常量
@@ -43,9 +44,11 @@ import type { MainPageProps } from './types';
 
 // 区域组件
 import BackgroundArea from './BackgroundArea';
+import ProfileSkeleton from './ProfileSkeleton';
 import SocialStatsArea from './SocialStatsArea';
 import TabContentArea from './TabContentArea';
 import TabNavigationArea from './TabNavigationArea';
+import UnauthenticatedArea from './UnauthenticatedArea';
 import UserInfoArea from './UserInfoArea';
 // #endregion
 
@@ -73,6 +76,10 @@ const useMainPageState = (props: MainPageProps) => {
   const loading = useProfileStore((state) => state.loading);
   const error = useProfileStore((state) => state.error);
   
+  // 🆕 从AuthStore获取认证状态
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const isInitialized = useAuthStore((state) => state.isInitialized);
+  
   // 获取Actions
   const setActiveTab = useProfileStore((state) => state.setActiveTab);
   const loadUserProfile = useProfileStore((state) => state.loadUserProfile);
@@ -89,14 +96,22 @@ const useMainPageState = (props: MainPageProps) => {
     }
   }, [props.initialTab, activeTab, setActiveTab]);
   
-  // 加载用户资料
+  // 🆕 加载用户资料 - 只在已登录时加载
   useEffect(() => {
-    console.log('\n📱 MainPage - 开始加载用户资料');
+    console.log('\n📱 MainPage - 检查认证状态');
+    console.log('   是否已初始化:', isInitialized);
+    console.log('   是否已登录:', isAuthenticated);
     console.log('   用户ID:', props.userId || 'current-user');
     console.log('   是否本人:', isOwnProfile);
     
-    loadUserProfile(props.userId);
-  }, [props.userId, loadUserProfile]);
+    // 🎯 只有在已登录时才加载用户资料
+    if (isInitialized && isAuthenticated) {
+      console.log('   ✅ 已登录，开始加载用户资料');
+      loadUserProfile(props.userId);
+    } else if (isInitialized && !isAuthenticated) {
+      console.log('   ⚠️ 未登录，跳过加载资料');
+    }
+  }, [props.userId, isInitialized, isAuthenticated, loadUserProfile]);
   
   return {
     activeTab,
@@ -108,6 +123,9 @@ const useMainPageState = (props: MainPageProps) => {
     followUser,
     unfollowUser,
     loadUserProfile,
+    // 🆕 新增认证状态
+    isAuthenticated,
+    isInitialized,
   };
 };
 // #endregion
@@ -222,6 +240,8 @@ const MainPage: React.FC<MainPageProps> = (props) => {
     userInfo,
     loading,
     isOwnProfile,
+    isAuthenticated,
+    isInitialized,
     handleTabChange,
     handleBack,
     handleAvatarPress,
@@ -232,17 +252,39 @@ const MainPage: React.FC<MainPageProps> = (props) => {
     handleLikePress,
   } = useMainPageLogic(props);
   
-  if (!userInfo) {
+  // 🎯 未初始化 - 显示空白（等待AuthStore初始化）
+  if (!isInitialized) {
     return (
       <SafeAreaView style={styles.container}>
         <StatusBar barStyle="dark-content" />
         <View style={styles.loading}>
-          <Text style={styles.loadingText}>加载中...</Text>
+          <Text style={styles.loadingText}>初始化中...</Text>
         </View>
       </SafeAreaView>
     );
   }
   
+  // 🎯 未登录状态 - 显示友好的未登录UI
+  if (!isAuthenticated) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <StatusBar barStyle="dark-content" />
+        <UnauthenticatedArea />
+      </SafeAreaView>
+    );
+  }
+  
+  // 🎯 已登录但数据加载中 - 显示骨架屏
+  if (loading || !userInfo) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <StatusBar barStyle="dark-content" />
+        <ProfileSkeleton />
+      </SafeAreaView>
+    );
+  }
+  
+  // 🎯 已登录且有数据 - 显示完整页面
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
@@ -256,7 +298,10 @@ const MainPage: React.FC<MainPageProps> = (props) => {
         {/* 背景头图区域 */}
         <BackgroundArea
           imageUrl={userInfo.backgroundImage}
+          avatarUrl={userInfo.avatar}
           onBack={handleBack}
+          onEdit={handleEditPress}
+          showEditButton={isOwnProfile}
         />
         
         {/* 用户信息区域 */}

@@ -1,0 +1,20 @@
+{
+	"folders": [
+		{
+			"name": "RuoYi-Cloud-Plus",
+			"path": "../../../../RuoYi-Cloud-Plus"
+		},
+		{
+			"name": "XiangYuPai-RNExpoAPP",
+			"path": "../../.."
+		},
+		{
+			"name": "TXT",
+			"path": "../../../../TXT"
+		},
+		{
+			"path": "../../../../TXT2"
+		}
+	],
+	"settings": {}
+}

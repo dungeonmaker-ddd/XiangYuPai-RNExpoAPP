@@ -119,7 +119,9 @@ const UserListArea: React.FC<UserListAreaProps> = ({
     return null;
   }, [loading, users.length]);
 
-  const keyExtractor = useCallback((item: UserCard) => item.id, []);
+  const keyExtractor = useCallback((item: UserCard, index: number) => 
+    item.id || `user-${index}`, 
+  []);
 
   return (
     <View style={[styles.container, getListStyle()]}>

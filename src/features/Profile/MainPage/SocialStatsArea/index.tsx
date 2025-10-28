@@ -72,8 +72,7 @@ const SocialStatsArea: React.FC<SocialStatsAreaProps> = ({
         onPress={onLikePress}
         activeOpacity={0.7}
       >
-        <Text style={styles.statNumber}>获赞与收藏</Text>
-        <Text style={styles.statLabel}></Text>
+        <Text style={styles.statLabel}>获赞与收藏</Text>
       </TouchableOpacity>
     </View>
   );

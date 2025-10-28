@@ -1,138 +1,32 @@
 /**
- * Discovery API Service - 发现页面API服务
+ * 发现页面 API 服务
  * 
- * 功能：
- * - 动态流获取（关注/热门/同城）
- * - 动态详情查询
- * - 评论管理
- * - 互动操作（点赞/收藏/分享）
- * - 话题管理
+ * 说明：
+ * - 所有接口都是公开的，无需登录即可访问
+ * - 后端对应 DiscoveryController（/api/v1/discovery/**）
+ * - 已在网关配置白名单
  * 
- * 后端对接：
- * - xypai-content模块（ContentController）
- * - xypai-content模块（CommentController）
- * - xypai-content模块（ContentActionController）
+ * @author xypai
+ * @date 2025-10-25
  */
 
-import type { ApiResponse } from './client';
 import { apiClient } from './client';
-import { API_ENDPOINTS, buildQueryParams, buildURL } from './config';
+import { buildQueryParams } from './config';
+import type { ContentDetailVO, ContentListVO } from './types/content';
 
 // ==================== 类型定义 ====================
 
 /**
- * 动态列表查询参数
+ * FeedListItem - 动态流列表项
+ * 
+ * 注：与 ContentListVO 类型相同，用于兼容前端命名习惯
  */
-export interface FeedListParams {
-  tab: 'follow' | 'hot' | 'local';  // Tab类型
-  page?: number;                     // 页码
-  pageSize?: number;                 // 每页数量
-  type?: number;                     // 内容类型(1=动态,2=活动,3=技能)
-  refresh?: boolean;                 // 是否刷新
-  
-  // 同城Tab专用参数
-  longitude?: number;                // 经度
-  latitude?: number;                 // 纬度
-  radius?: number;                   // 半径(米)
-  cityId?: number;                   // 城市ID
-}
+export type FeedListItem = ContentListVO;
 
 /**
- * 动态详情响应
- */
-export interface FeedDetail {
-  id: string;
-  userId: string;
-  type: number;
-  typeDesc: string;
-  title: string;
-  content: string;
-  coverUrl?: string;
-  
-  // 地理位置信息
-  locationName?: string;
-  locationAddress?: string;
-  longitude?: number;
-  latitude?: number;
-  cityId?: number;
-  
-  // 用户信息（冗余字段）
-  userNickname: string;
-  userAvatar?: string;
-  
-  // 统计数据
-  viewCount: number;
-  likeCount: number;
-  commentCount: number;
-  shareCount: number;
-  collectCount: number;
-  
-  // 用户互动状态
-  isLiked: boolean;
-  isCollected: boolean;
-  
-  // 时间信息
-  createdAt: string;
-  updatedAt: string;
-}
-
-/**
- * 动态列表项
- */
-export interface FeedListItem {
-  id: string;
-  userId: string;
-  type: number;
-  typeDesc: string;
-  title: string;
-  summary?: string;
-  coverImage?: string;
-  
-  // 地理位置
-  locationName?: string;
-  locationAddress?: string;
-  longitude?: number;
-  latitude?: number;
-  distance?: number;  // 距离(km)
-  
-  // 用户信息
-  userNickname: string;
-  userAvatar?: string;
-  
-  // 统计数据
-  likeCount: number;
-  commentCount: number;
-  shareCount: number;
-  collectCount: number;
-  viewCount: number;
-  
-  // 用户状态
-  isLiked: boolean;
-  isCollected: boolean;
-  
-  createdAt: string;
-}
-
-/**
- * 动态列表响应
- */
-export interface FeedListResponse {
-  list: FeedListItem[];
-  total: number;
-  hasMore: boolean;
-}
-
-/**
- * 评论列表参数
- */
-export interface CommentListParams {
-  contentId: number;
-  pageNum?: number;
-  pageSize?: number;
-}
-
-/**
- * 评论项
+ * 评论项类型
+ * 
+ * 注：用于评论列表和评论详情
  */
 export interface CommentItem {
   id: string;
@@ -140,295 +34,315 @@ export interface CommentItem {
   userId: string;
   userNickname: string;
   userAvatar?: string;
+  commentText: string;
   parentId?: string;
   replyToId?: string;
   replyToUserId?: string;
   replyToUserNickname?: string;
-  commentText: string;
   likeCount: number;
   replyCount: number;
   isTop: boolean;
   liked: boolean;
-  createdAt: string;
-  
-  // 二级回复
   replies?: CommentItem[];
   totalReplies?: number;
   hasMoreReplies?: boolean;
+  createdAt: string;
+}
+
+// ==================== 导出类型 ====================
+
+export type { ContentDetailVO, ContentListVO };
+
+/**
+ * 请求参数接口
+ */
+export interface GetContentsParams {
+  type?: number;
+  limit?: number;
+  city?: string;
+}
+
+export interface SearchParams {
+  keyword: string;
+  type?: number;
+  limit?: number;
+}
+
+export interface NearbyParams {
+  longitude: number;
+  latitude: number;
+  radius?: number;
+  type?: number;
+  limit?: number;
 }
 
 /**
- * 添加评论请求
+ * 发现页面 API 类
+ * 
+ * 功能模块：
+ * 1. 内容流展示（热门、推荐、同城）
+ * 2. 内容搜索
+ * 3. 内容详情查看
+ * 4. 地理位置相关内容
  */
-export interface AddCommentRequest {
-  contentId: number;
-  parentId?: number;
-  replyToId?: number;
-  replyToUserId?: number;
-  commentText: string;
+export class DiscoveryAPI {
+  /**
+   * 获取热门内容
+   * 
+   * @param params - 查询参数（type, limit）
+   * @returns 热门内容列表
+   */
+  async getHotContents(params: GetContentsParams = {}): Promise<ContentListVO[]> {
+    const { type, limit = 20 } = params;
+    try {
+      const queryParams = buildQueryParams({ type, limit });
+      const url = `/xypai-content/api/v1/discovery/hot${queryParams ? `?${queryParams}` : ''}`;
+      
+      const response = await apiClient.get<ContentListVO[]>(url);
+
+      console.log('[DiscoveryAPI] 获取热门内容成功', {
+        count: response.data?.length || 0,
+        type,
+        limit
+      });
+
+      return response.data || [];
+    } catch (error) {
+      console.error('[DiscoveryAPI] 获取热门内容失败', error);
+      return [];
+    }
+  }
+
+  /**
+   * 获取推荐内容
+   * 
+   * @param params - 查询参数（type, limit）
+   * @returns 推荐内容列表
+   */
+  async getRecommendedContents(params: GetContentsParams = {}): Promise<ContentListVO[]> {
+    const { type, limit = 20 } = params;
+    try {
+      const queryParams = buildQueryParams({ type, limit });
+      const url = `/xypai-content/api/v1/discovery/recommended${queryParams ? `?${queryParams}` : ''}`;
+      
+      const response = await apiClient.get<ContentListVO[]>(url);
+
+      console.log('[DiscoveryAPI] 获取推荐内容成功', {
+        count: response.data?.length || 0,
+        type,
+        limit
+      });
+
+      return response.data || [];
+    } catch (error) {
+      console.error('[DiscoveryAPI] 获取推荐内容失败', error);
+      return [];
+    }
+  }
+
+  /**
+   * 获取同城内容
+   * 
+   * @param params - 查询参数（city, type, limit）
+   * @returns 同城内容列表
+   */
+  async getLocalContents(params: GetContentsParams = {}): Promise<ContentListVO[]> {
+    const { city, type, limit = 20 } = params;
+    try {
+      const queryParams = buildQueryParams({ city, type, limit });
+      const url = `/xypai-content/api/v1/discovery/local${queryParams ? `?${queryParams}` : ''}`;
+      
+      const response = await apiClient.get<ContentListVO[]>(url);
+
+      console.log('[DiscoveryAPI] 获取同城内容成功', {
+        count: response.data?.length || 0,
+        city,
+        type,
+        limit
+      });
+
+      return response.data || [];
+    } catch (error) {
+      console.error('[DiscoveryAPI] 获取同城内容失败', error);
+      return [];
+    }
+  }
+
+  /**
+   * 搜索内容
+   * 
+   * @param params - 查询参数（keyword, type, limit）
+   * @returns 搜索结果列表
+   */
+  async searchContents(params: SearchParams): Promise<ContentListVO[]> {
+    const { keyword, type, limit = 20 } = params;
+    try {
+      if (!keyword || keyword.trim() === '') {
+        console.warn('[DiscoveryAPI] 搜索关键词为空');
+        return [];
+      }
+
+      const queryParams = buildQueryParams({ keyword: keyword.trim(), type, limit });
+      const url = `/xypai-content/api/v1/discovery/search${queryParams ? `?${queryParams}` : ''}`;
+      
+      const response = await apiClient.get<ContentListVO[]>(url);
+
+      console.log('[DiscoveryAPI] 搜索内容成功', {
+        count: response.data?.length || 0,
+        keyword,
+        type,
+        limit
+      });
+
+      return response.data || [];
+    } catch (error) {
+      console.error('[DiscoveryAPI] 搜索内容失败', { keyword, error });
+      return [];
+    }
+  }
+
+  /**
+   * 获取内容详情
+   * 
+   * @param contentId - 内容ID
+   * @returns 内容详情
+   */
+  async getContentDetail(contentId: number | string): Promise<ContentDetailVO | null> {
+    try {
+      if (!contentId) {
+        console.warn('[DiscoveryAPI] 内容ID为空');
+        return null;
+      }
+
+      const response = await apiClient.get<ContentDetailVO>(
+        `/xypai-content/api/v1/discovery/${contentId}`
+      );
+
+      console.log('[DiscoveryAPI] 获取内容详情成功', { contentId });
+      return response.data || null;
+    } catch (error) {
+      console.error('[DiscoveryAPI] 获取内容详情失败', { contentId, error });
+      return null;
+    }
+  }
+
+  /**
+   * 获取附近内容（基于地理位置）
+   * 
+   * @param longitude - 经度
+   * @param latitude - 纬度
+   * @param radius - 半径（米），默认 5000
+   * @param type - 内容类型（可选）
+   * @param limit - 返回数量限制，默认 20
+   * @returns 附近内容列表
+   */
+  async getNearbyContents(
+    longitude: number,
+    latitude: number,
+    radius: number = 5000,
+    type?: number,
+    limit: number = 20
+  ): Promise<ContentListVO[]> {
+    try {
+      if (!longitude || !latitude) {
+        console.warn('[DiscoveryAPI] 经纬度参数无效');
+        return [];
+      }
+
+      const queryParams = buildQueryParams({ longitude, latitude, radius, type, limit });
+      const url = `/xypai-content/api/v1/discovery/nearby${queryParams ? `?${queryParams}` : ''}`;
+      
+      const response = await apiClient.get<ContentListVO[]>(url);
+
+      console.log('[DiscoveryAPI] 获取附近内容成功', {
+        count: response.data?.length || 0,
+        location: { longitude, latitude },
+        radius,
+        type,
+        limit
+      });
+
+      return response.data || [];
+    } catch (error) {
+      console.error('[DiscoveryAPI] 获取附近内容失败', {
+        location: { longitude, latitude },
+        error
+      });
+      return [];
+    }
+  }
+
+  /**
+   * 获取城市内容
+   * 
+   * @param cityId - 城市ID
+   * @param type - 内容类型（可选）
+   * @param limit - 返回数量限制，默认 50
+   * @returns 城市内容列表
+   */
+  async getContentsByCity(cityId: number, type?: number, limit: number = 50): Promise<ContentListVO[]> {
+    try {
+      if (!cityId) {
+        console.warn('[DiscoveryAPI] 城市ID为空');
+        return [];
+      }
+
+      const queryParams = buildQueryParams({ type, limit });
+      const url = `/xypai-content/api/v1/discovery/city/${cityId}${queryParams ? `?${queryParams}` : ''}`;
+      
+      const response = await apiClient.get<ContentListVO[]>(url);
+
+      console.log('[DiscoveryAPI] 获取城市内容成功', {
+        count: response.data?.length || 0,
+        cityId,
+        type,
+        limit
+      });
+
+      return response.data || [];
+    } catch (error) {
+      console.error('[DiscoveryAPI] 获取城市内容失败', { cityId, error });
+      return [];
+    }
+  }
+
+  /**
+   * 获取用户发布的内容
+   * 
+   * @param userId - 用户ID
+   * @param type - 内容类型（可选）
+   * @param limit - 返回数量限制，默认 20
+   * @returns 用户内容列表
+   */
+  async getUserContents(userId: number, type?: number, limit: number = 20): Promise<ContentListVO[]> {
+    try {
+      if (!userId) {
+        console.warn('[DiscoveryAPI] 用户ID为空');
+        return [];
+      }
+
+      const queryParams = buildQueryParams({ type, limit });
+      const url = `/xypai-content/api/v1/discovery/user/${userId}${queryParams ? `?${queryParams}` : ''}`;
+      
+      const response = await apiClient.get<ContentListVO[]>(url);
+
+      console.log('[DiscoveryAPI] 获取用户内容成功', {
+        count: response.data?.length || 0,
+        userId,
+        type,
+        limit
+      });
+
+      return response.data || [];
+    } catch (error) {
+      console.error('[DiscoveryAPI] 获取用户内容失败', { userId, error });
+      return [];
+    }
+  }
 }
 
-/**
- * 互动操作请求
- */
-export interface InteractionRequest {
-  action: 'like' | 'unlike' | 'collect' | 'uncollect' | 'share';
-  contentId: number;
-}
+// 导出单例实例
+export const discoveryApi = new DiscoveryAPI();
 
-// ==================== API方法 ====================
-
-/**
- * 获取动态流列表
- */
-export const getFeedList = async (
-  params: FeedListParams
-): Promise<ApiResponse<FeedListResponse>> => {
-  const { tab, page = 1, pageSize = 20, type, refresh, longitude, latitude, radius, cityId } = params;
-  
-  // 根据Tab类型选择不同的接口
-  if (tab === 'local' && longitude && latitude) {
-    // 同城Tab：使用附近内容查询（空间索引）
-    const queryParams = buildQueryParams({
-      longitude,
-      latitude,
-      radius: radius || 5000,  // 默认5km
-      type,
-      limit: pageSize,
-    });
-    
-    const endpoint = `${API_ENDPOINTS.CONTENT.NEARBY}?${queryParams}`;
-    return apiClient.get<FeedListResponse>(endpoint, {
-      cache: !refresh,
-      cacheTTL: 3 * 60 * 1000, // 3分钟缓存
-    });
-  }
-  
-  if (tab === 'local' && cityId) {
-    // 同城Tab：使用城市内容查询
-    const queryParams = buildQueryParams({
-      type,
-      limit: pageSize,
-    });
-    
-    const endpoint = buildURL(API_ENDPOINTS.CONTENT.BY_CITY, { cityId: String(cityId) });
-    return apiClient.get<FeedListResponse>(`${endpoint}?${queryParams}`, {
-      cache: !refresh,
-      cacheTTL: 3 * 60 * 1000,
-    });
-  }
-  
-  if (tab === 'hot') {
-    // 热门Tab：使用热门内容接口
-    const queryParams = buildQueryParams({
-      type,
-      limit: pageSize,
-    });
-    
-    return apiClient.get<FeedListResponse>(`${API_ENDPOINTS.CONTENT.HOT}?${queryParams}`, {
-      cache: !refresh,
-      cacheTTL: 5 * 60 * 1000, // 5分钟缓存
-    });
-  }
-  
-  if (tab === 'follow') {
-    // 关注Tab：使用推荐内容接口（TODO：后续需要后端提供专门的关注流接口）
-    const queryParams = buildQueryParams({
-      type,
-      limit: pageSize,
-    });
-    
-    return apiClient.get<FeedListResponse>(`${API_ENDPOINTS.CONTENT.RECOMMENDED}?${queryParams}`, {
-      cache: !refresh,
-      cacheTTL: 2 * 60 * 1000,
-    });
-  }
-  
-  // 默认：使用通用列表接口
-  const queryParams = buildQueryParams({
-    type,
-    page,
-    pageSize,
-  });
-  
-  return apiClient.get<FeedListResponse>(`${API_ENDPOINTS.CONTENT.LIST}?${queryParams}`, {
-    cache: !refresh,
-  });
-};
-
-/**
- * 获取动态详情
- */
-export const getFeedDetail = async (
-  contentId: number
-): Promise<ApiResponse<FeedDetail>> => {
-  const endpoint = buildURL(API_ENDPOINTS.CONTENT.DETAIL, { contentId: String(contentId) });
-  
-  return apiClient.get<FeedDetail>(endpoint, {
-    cache: true,
-    cacheTTL: 5 * 60 * 1000,
-  });
-};
-
-/**
- * 获取评论列表
- */
-export const getCommentList = async (
-  params: CommentListParams
-): Promise<ApiResponse<CommentItem[]>> => {
-  const { contentId, pageNum = 1, pageSize = 20 } = params;
-  
-  const queryParams = buildQueryParams({ pageNum, pageSize });
-  const endpoint = buildURL(API_ENDPOINTS.COMMENT.LIST, { contentId: String(contentId) });
-  
-  return apiClient.get<CommentItem[]>(`${endpoint}?${queryParams}`, {
-    cache: true,
-    cacheTTL: 1 * 60 * 1000, // 1分钟缓存
-  });
-};
-
-/**
- * 添加评论
- */
-export const addComment = async (
-  request: AddCommentRequest
-): Promise<ApiResponse<number>> => {
-  return apiClient.post<number>(API_ENDPOINTS.COMMENT.ADD, request);
-};
-
-/**
- * 点赞动态
- */
-export const likeFeed = async (
-  contentId: number
-): Promise<ApiResponse<void>> => {
-  const endpoint = buildURL(API_ENDPOINTS.INTERACTION.LIKE, { contentId: String(contentId) });
-  return apiClient.post<void>(endpoint, {});
-};
-
-/**
- * 取消点赞
- */
-export const unlikeFeed = async (
-  contentId: number
-): Promise<ApiResponse<void>> => {
-  const endpoint = buildURL(API_ENDPOINTS.INTERACTION.UNLIKE, { contentId: String(contentId) });
-  return apiClient.delete<void>(endpoint);
-};
-
-/**
- * 收藏动态
- */
-export const collectFeed = async (
-  contentId: number
-): Promise<ApiResponse<void>> => {
-  const endpoint = buildURL(API_ENDPOINTS.INTERACTION.COLLECT, { contentId: String(contentId) });
-  return apiClient.post<void>(endpoint, {});
-};
-
-/**
- * 取消收藏
- */
-export const uncollectFeed = async (
-  contentId: number
-): Promise<ApiResponse<void>> => {
-  const endpoint = buildURL(API_ENDPOINTS.INTERACTION.UNCOLLECT, { contentId: String(contentId) });
-  return apiClient.delete<void>(endpoint);
-};
-
-/**
- * 分享动态
- */
-export const shareFeed = async (
-  contentId: number
-): Promise<ApiResponse<void>> => {
-  const endpoint = buildURL(API_ENDPOINTS.INTERACTION.SHARE, { contentId: String(contentId) });
-  return apiClient.post<void>(endpoint, {});
-};
-
-/**
- * 评论点赞
- */
-export const likeComment = async (
-  commentId: number
-): Promise<ApiResponse<boolean>> => {
-  const endpoint = buildURL(API_ENDPOINTS.COMMENT.LIKE, { commentId: String(commentId) });
-  return apiClient.post<boolean>(endpoint, {});
-};
-
-/**
- * 搜索内容
- */
-export const searchFeeds = async (
-  keyword: string,
-  type?: number
-): Promise<ApiResponse<FeedListItem[]>> => {
-  const queryParams = buildQueryParams({ keyword, type });
-  
-  return apiClient.get<FeedListItem[]>(`${API_ENDPOINTS.CONTENT.SEARCH}?${queryParams}`, {
-    cache: true,
-    cacheTTL: 2 * 60 * 1000,
-  });
-};
-
-/**
- * 获取用户的动态列表
- */
-export const getUserFeeds = async (
-  userId: number,
-  type?: number
-): Promise<ApiResponse<FeedListItem[]>> => {
-  const endpoint = buildURL(API_ENDPOINTS.CONTENT.USER_CONTENTS, { userId: String(userId) });
-  const queryParams = buildQueryParams({ type });
-  
-  return apiClient.get<FeedListItem[]>(`${endpoint}?${queryParams}`, {
-    cache: true,
-    cacheTTL: 3 * 60 * 1000,
-  });
-};
-
-/**
- * 检查用户对动态的互动状态
- */
-export const checkFeedActionStatus = async (
-  contentId: number
-): Promise<ApiResponse<{ liked: boolean; collected: boolean }>> => {
-  const endpoint = buildURL(API_ENDPOINTS.INTERACTION.STATUS, { contentId: String(contentId) });
-  return apiClient.get<{ liked: boolean; collected: boolean }>(endpoint);
-};
-
-/**
- * 获取动态统计数据
- */
-export const getFeedStatistics = async (
-  contentId: number
-): Promise<ApiResponse<{
-  likeCount: number;
-  commentCount: number;
-  shareCount: number;
-  collectCount: number;
-  viewCount: number;
-}>> => {
-  const endpoint = buildURL(API_ENDPOINTS.INTERACTION.STATISTICS, { contentId: String(contentId) });
-  return apiClient.get(endpoint);
-};
-
-// ==================== 导出 ====================
-
-export const discoveryApi = {
-  getFeedList,
-  getFeedDetail,
-  getCommentList,
-  addComment,
-  likeFeed,
-  unlikeFeed,
-  collectFeed,
-  uncollectFeed,
-  shareFeed,
-  likeComment,
-  searchFeeds,
-  getUserFeeds,
-  checkFeedActionStatus,
-  getFeedStatistics,
-};
-
+// 默认导出
+export default discoveryApi;

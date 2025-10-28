@@ -168,13 +168,44 @@ const useMainPageLogic = (props: MainPageProps) => {
   }, [router]);
   
   /**
-   * 用户点击处理
+   * 用户点击处理 - 直接跳转到完整的其他用户主页
    */
   const handleUserPress = useCallback((user: UserCard) => {
-    console.log('[MainPage] 🧭 导航: 首页 → 用户详情', { userId: user.id, username: user.username });
+    console.log('[MainPage] 🧭 导航: 首页 → 其他用户完整主页', { userId: user.id, username: user.username });
     router.push({
-      pathname: '/modal/user-detail',
+      pathname: '/profile/[userId]',
       params: { userId: user.id },
+    });
+  }, [router]);
+  
+  /**
+   * 查看用户完整个人主页
+   * 跳转到其他用户的完整主页（使用 OtherUserProfilePage）
+   */
+  const handleViewUserProfile = useCallback((userId: string) => {
+    console.log('[MainPage] 🧭 导航: 首页 → 其他用户主页', { userId });
+    router.push({
+      pathname: '/profile/[userId]',
+      params: { userId },
+    });
+  }, [router]);
+  
+  /**
+   * 跳转到发现页面
+   */
+  const handleGoToDiscovery = useCallback(() => {
+    console.log('[MainPage] 🧭 导航: 首页 → 发现页面');
+    router.push('/(tabs)/discover');
+  }, [router]);
+  
+  /**
+   * 查看动态详情
+   */
+  const handleViewPost = useCallback((postId: string) => {
+    console.log('[MainPage] 🧭 导航: 首页 → 动态详情', { postId });
+    router.push({
+      pathname: '/feed/[id]',
+      params: { id: postId },
     });
   }, [router]);
   
@@ -221,6 +252,9 @@ const useMainPageLogic = (props: MainPageProps) => {
     handleGameBannerPress,
     handleFunctionPress,
     handleUserPress,
+    handleViewUserProfile,
+    handleGoToDiscovery,
+    handleViewPost,
     handleMoreOffersPress,
     handleTeamPartyPress,
     handlePublishPress,
@@ -252,6 +286,9 @@ const MainPage: React.FC<MainPageProps> = (props) => {
     handleGameBannerPress,
     handleFunctionPress,
     handleUserPress,
+    handleViewUserProfile,
+    handleGoToDiscovery,
+    handleViewPost,
     handleMoreOffersPress,
     handleTeamPartyPress,
     handlePublishPress,

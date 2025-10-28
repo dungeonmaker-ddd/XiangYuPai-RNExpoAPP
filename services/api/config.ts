@@ -92,9 +92,11 @@ export const API_ENDPOINTS = {
     
     // 首页用户查询（集成筛选）
     USER_LIST: '/xypai-user/api/v1/homepage/users/list',
-    NEARBY_USERS: '/xypai-user/api/v1/homepage/users/nearby',
-    RECOMMEND_USERS: '/xypai-user/api/v1/homepage/users/recommend',
-    LATEST_USERS: '/xypai-user/api/v1/homepage/users/latest',
+    NEARBY_USERS: '/xypai-user/api/v1/homepage/nearby-users',       // ✅ 后端已实现
+    RECOMMENDED_USERS: '/xypai-user/api/v1/homepage/recommended-users', // ✅ 后端已实现
+    NEW_USERS: '/xypai-user/api/v1/homepage/new-users',            // ✅ 后端已实现
+    RECOMMEND_USERS: '/xypai-user/api/v1/homepage/users/recommend', // 兼容旧代码
+    LATEST_USERS: '/xypai-user/api/v1/homepage/users/latest',      // 兼容旧代码
   },
   
   // 用户资料相关（已有接口 - xypai-user模块）

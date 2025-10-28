@@ -159,42 +159,56 @@ export const useDiscoveryStore = create<DiscoveryStore>((set, get) => ({
     }
     
     try {
-      // 调用API
-      const response = await discoveryApi.getFeedList({
-        tab,
-        page: refresh ? 1 : state.feedData.page[tab],
-        pageSize: 20,
-        refresh,
-      });
+      const limit = 20;
+      let response;
       
-      if (response.success && response.data) {
-        const { list, hasMore } = response.data;
-        
-        // 转换后端数据为前端格式
-        const transformedFeeds = transformFeedList(list);
-        
-        set((state) => ({
-          feedData: {
-            ...state.feedData,
-            [`${tab}Feeds`]: refresh ? transformedFeeds : [...state.feedData[`${tab}Feeds`], ...transformedFeeds],
-            page: {
-              ...state.feedData.page,
-              [tab]: refresh ? 1 : state.feedData.page[tab],
-            },
-            hasMore: {
-              ...state.feedData.hasMore,
-              [tab]: hasMore,
-            },
-          },
-          ui: {
-            ...state.ui,
-            loading: false,
-            refreshing: false,
-            error: null,
-            lastRefreshTime: refresh ? Date.now() : state.ui.lastRefreshTime,
-          },
-        }));
+      // 根据tab调用不同的API
+      switch (tab) {
+        case 'hot':
+          response = await discoveryApi.getHotContents({ limit });
+          break;
+        case 'follow':
+          // 关注Tab使用推荐内容（TODO: 后续接入真实关注流）
+          response = await discoveryApi.getRecommendedContents({ limit });
+          break;
+        case 'local':
+          // 同城Tab使用本地内容
+          response = await discoveryApi.getLocalContents({ limit });
+          break;
+        default:
+          response = await discoveryApi.getHotContents({ limit });
       }
+      
+      // discoveryApi 直接返回数组，不是 { success, data } 格式
+      const list = response || [];
+      
+      // 转换后端数据为前端格式
+      const transformedFeeds = list.length > 0 ? transformFeedList(list) : [];
+      
+      // 判断是否还有更多（简单判断：返回数量=limit说明可能还有更多）
+      const hasMore = list.length >= limit;
+      
+      set((state) => ({
+        feedData: {
+          ...state.feedData,
+          [`${tab}Feeds`]: refresh ? transformedFeeds : [...state.feedData[`${tab}Feeds`], ...transformedFeeds],
+          page: {
+            ...state.feedData.page,
+            [tab]: refresh ? 1 : state.feedData.page[tab],
+          },
+          hasMore: {
+            ...state.feedData.hasMore,
+            [tab]: hasMore,
+          },
+        },
+        ui: {
+          ...state.ui,
+          loading: false,
+          refreshing: false,
+          error: null,
+          lastRefreshTime: refresh ? Date.now() : state.ui.lastRefreshTime,
+        },
+      }));
     } catch (error) {
       console.error('加载动态流失败:', error);
       set((state) => ({
@@ -222,31 +236,38 @@ export const useDiscoveryStore = create<DiscoveryStore>((set, get) => ({
     }));
     
     try {
-      const nextPage = state.feedData.page[tab] + 1;
+      const limit = 20;
+      let response;
       
-      const response = await discoveryApi.getFeedList({
-        tab,
-        page: nextPage,
-        pageSize: 20,
-      });
+      // 根据tab调用不同的API
+      // 注意：目前公开API不支持分页，这里暂时返回空（后续可扩展）
+      switch (tab) {
+        case 'hot':
+          response = await discoveryApi.getHotContents({ limit });
+          break;
+        case 'follow':
+          response = await discoveryApi.getRecommendedContents({ limit });
+          break;
+        case 'local':
+          response = await discoveryApi.getLocalContents({ limit });
+          break;
+        default:
+          response = await discoveryApi.getHotContents({ limit });
+      }
       
       if (response.success && response.data) {
-        const { list, hasMore } = response.data;
+        const list = response.data;
         
-        // 转换后端数据为前端格式
-        const transformedFeeds = transformFeedList(list);
+        // TODO: 目前公开API不支持分页，这里暂时不追加数据
+        // 等后端支持分页参数后再启用
+        console.warn('[Discovery Store] 当前API不支持分页，暂不加载更多');
         
         set((state) => ({
           feedData: {
             ...state.feedData,
-            [`${tab}Feeds`]: [...state.feedData[`${tab}Feeds`], ...transformedFeeds],
-            page: {
-              ...state.feedData.page,
-              [tab]: nextPage,
-            },
             hasMore: {
               ...state.feedData.hasMore,
-              [tab]: hasMore,
+              [tab]: false, // 暂时禁用加载更多
             },
           },
           ui: {
