@@ -91,6 +91,24 @@ export default function RootLayout() {
             animation: 'slide_from_bottom',
           }} 
         />
+        
+        {/* 用户主页路由 */}
+        <Stack.Screen 
+          name="profile/[userId]" 
+          options={{ 
+            headerShown: false,
+            animation: 'slide_from_right',
+          }} 
+        />
+        
+        {/* 动态详情页 */}
+        <Stack.Screen 
+          name="feed/[id]" 
+          options={{ 
+            headerShown: false,
+            animation: 'slide_from_right',
+          }} 
+        />
       </Stack>
       <StatusBar style="auto" />
     </ThemeProvider>

@@ -107,7 +107,12 @@ const useDynamicData = (userId: string) => {
     setLoading(true);
     try {
       await new Promise(resolve => setTimeout(resolve, 1000));
-      const newData = generateMockData(10);
+      // 🔧 Fix: Generate unique IDs by using current data length as offset
+      const currentLength = data.length;
+      const newData = generateMockData(10).map((item, index) => ({
+        ...item,
+        id: `${currentLength + index + 1}`, // Unique ID
+      }));
       setData(prev => [...prev, ...newData]);
       if (data.length >= 50) {
         setHasMore(false);

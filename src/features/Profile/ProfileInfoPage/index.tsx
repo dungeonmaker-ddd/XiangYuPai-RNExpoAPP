@@ -11,16 +11,16 @@
 // #region 2. Imports
 import React, { useEffect, useState } from 'react';
 import {
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from 'react-native';
 
 // Store和API
+import { profileApi } from '@/services/api/profileApi';
 import { useProfileStore } from '@/stores/profileStore';
-import { mockProfileApi, profileApi } from '@/services/api/profileApi';
 import { profileDataTransform } from '../utils/dataTransform';
 
 import type { ProfileFields, SkillItem } from '../types';
@@ -76,8 +76,8 @@ const useProfileInfoLogic = (userId: string, isOwnProfile: boolean) => {
         console.log('\n📋 ProfileInfoPage - 加载资料数据');
         console.log('   用户ID:', userId);
         
-        // 🎯 调用API获取职业标签
-        const api = __DEV__ ? mockProfileApi : profileApi;
+        // 🎯 调用真实后端API获取职业标签
+        const api = profileApi;
         
         const occupationsData = await api.getUserOccupations(Number(userId));
         

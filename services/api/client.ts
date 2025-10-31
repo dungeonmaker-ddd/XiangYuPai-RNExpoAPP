@@ -144,12 +144,50 @@ const handleHttpError = (status: number, statusText: string): ApiError => {
   }
 };
 
+// 🎯 Token传输配置（用于测试不同的token传输方式）
+export interface TokenTransmissionConfig {
+  // 主要方法：Authorization Header (OAuth 2.0 标准)
+  useAuthorizationHeader: boolean;  // 默认: true - "Authorization: Bearer <token>"
+  
+  // 备用方法1：自定义Header (某些系统使用)
+  useCustomHeaders: boolean;        // 默认: false - "satoken: <token>" / "token: <token>"
+  customHeaderNames?: string[];     // 自定义header名称，如 ['satoken', 'X-Token']
+  
+  // 备用方法2：URL参数 (SA-Token支持)
+  useUrlParameter: boolean;         // 默认: false - "?Authorization=<token>"
+  urlParameterName?: string;        // URL参数名，默认: 'Authorization'
+  
+  // ClientId传输
+  includeClientId: boolean;         // 默认: true - "clientid: app"
+  clientIdHeaderName: string;       // ClientId header名称，默认: 'clientid'
+  
+  // Token格式
+  tokenPrefix: string;              // Token前缀，默认: 'Bearer' (SA-Token要求)
+  
+  // 调试
+  enableDebugLogs: boolean;         // 启用详细日志
+}
+
+// 默认Token传输配置（符合SA-Token标准）
+const DEFAULT_TOKEN_CONFIG: TokenTransmissionConfig = {
+  useAuthorizationHeader: true,
+  useCustomHeaders: false,
+  customHeaderNames: ['satoken', 'token', 'X-Token'],  // 备用header名称
+  useUrlParameter: false,
+  urlParameterName: 'Authorization',
+  includeClientId: true,
+  clientIdHeaderName: 'clientid',
+  tokenPrefix: 'Bearer',
+  enableDebugLogs: true,
+};
+
 // API客户端类
 class ApiClient {
   private baseURL: string;
   private defaultHeaders: Record<string, string>;
   private authStoreGetter: any = null;  // 🎯 AuthStore的getter函数
-  private clientId: string = 'web_client';  // 🆕 客户端ID（与后端Sa-Token匹配）
+  private clientId: string = 'app';  // 🆕 客户端ID（必须与登录时的 clientType 一致！）
+  private tokenConfig: TokenTransmissionConfig = DEFAULT_TOKEN_CONFIG;  // 🆕 Token传输配置
 
   constructor() {
     this.baseURL = getBaseURL();
@@ -169,6 +207,25 @@ class ApiClient {
   getClientId(): string {
     return this.clientId;
   }
+  
+  // 🆕 配置Token传输方式（用于测试不同方式）
+  configureTokenTransmission(config: Partial<TokenTransmissionConfig>): void {
+    this.tokenConfig = { ...this.tokenConfig, ...config };
+    console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('🔧 [API Client] Token传输配置已更新');
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('   Authorization Header:', this.tokenConfig.useAuthorizationHeader ? '✅' : '❌');
+    console.log('   Custom Headers:', this.tokenConfig.useCustomHeaders ? `✅ ${this.tokenConfig.customHeaderNames?.join(', ')}` : '❌');
+    console.log('   URL Parameter:', this.tokenConfig.useUrlParameter ? `✅ ?${this.tokenConfig.urlParameterName}=<token>` : '❌');
+    console.log('   ClientId Header:', this.tokenConfig.includeClientId ? `✅ ${this.tokenConfig.clientIdHeaderName}: ${this.clientId}` : '❌');
+    console.log('   Token Prefix:', this.tokenConfig.tokenPrefix);
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+  }
+  
+  // 🆕 获取当前Token配置
+  getTokenConfig(): TokenTransmissionConfig {
+    return { ...this.tokenConfig };
+  }
 
   // 🎯 第三层：连接AuthStore，实现自动token管理
   connectAuthStore(useAuthStoreGetter: any): void {
@@ -180,6 +237,8 @@ class ApiClient {
   }
 
   // 设置认证token
+  // ✅ 后端 Sa-Token 配置要求 Bearer 前缀（token-prefix: Bearer）
+  // 发送标准 OAuth 2.0 格式："Authorization: Bearer <token>"
   setAuthToken(token: string): void {
     this.defaultHeaders['Authorization'] = `Bearer ${token}`;
   }
@@ -362,37 +421,113 @@ class ApiClient {
       cacheTTL = API_CONFIG.CACHE.TTL,
     } = config;
 
-    const fullUrl = url.startsWith('http') ? url : `${this.baseURL}${url}`;
+    let fullUrl = url.startsWith('http') ? url : `${this.baseURL}${url}`;
     const cacheKey = this.generateCacheKey(fullUrl, method, body);
+
+    // 🔥 详细日志：完整请求URL
+    console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log(`🌐 [API CLIENT] 准备发送请求`);
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log(`   方法: ${method}`);
+    console.log(`   基础URL: ${this.baseURL}`);
+    console.log(`   相对路径: ${url}`);
+    console.log(`   完整URL: ${fullUrl}`);
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
 
     // 检查缓存
     if (useCache && method === 'GET') {
       const cachedData = cache.get<ApiResponse<T>>(cacheKey);
       if (cachedData) {
+        console.log('💾 使用缓存数据');
         return cachedData;
       }
     }
 
-    // 🎯 请求拦截：自动添加Authorization token
+    // 🎯 准备请求头（基础）
+    const requestHeaders: Record<string, string> = {
+      ...this.defaultHeaders,
+      ...headers,
+    };
+
+    // 🎯 获取token并根据配置添加到请求中
     const token = this.getAuthToken();
+    
     if (token) {
-      this.setAuthToken(token);
-      console.log(`🔑 [第三层] API请求拦截 - 已自动添加token`);
-      console.log(`   请求: ${method} ${url}`);
-      console.log(`   Token: ${token.substring(0, 20)}...`);
+      if (this.tokenConfig.enableDebugLogs) {
+        console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        console.log('🔑 [Token Injection] 准备注入Token');
+        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        console.log(`   请求: ${method} ${url}`);
+        console.log(`   Token (前20字符): ${token.substring(0, 20)}...`);
+        console.log(`   Token (长度): ${token.length} 字符`);
+      }
+      
+      // 方法1: Authorization Header (OAuth 2.0标准 + SA-Token要求)
+      if (this.tokenConfig.useAuthorizationHeader) {
+        const tokenValue = this.tokenConfig.tokenPrefix 
+          ? `${this.tokenConfig.tokenPrefix} ${token}`
+          : token;
+        requestHeaders['Authorization'] = tokenValue;
+        
+        if (this.tokenConfig.enableDebugLogs) {
+          console.log(`   ✅ [Method 1] Authorization Header`);
+          console.log(`      Header: Authorization: ${tokenValue.substring(0, 30)}...`);
+          console.log(`      格式: ${this.tokenConfig.tokenPrefix ? `${this.tokenConfig.tokenPrefix} <token>` : '<token>'}`);
+        }
+      }
+      
+      // 方法2: 自定义Headers (备用 - 某些系统使用)
+      if (this.tokenConfig.useCustomHeaders && this.tokenConfig.customHeaderNames) {
+        this.tokenConfig.customHeaderNames.forEach(headerName => {
+          requestHeaders[headerName] = token;
+        });
+        
+        if (this.tokenConfig.enableDebugLogs) {
+          console.log(`   ✅ [Method 2] Custom Headers`);
+          console.log(`      Headers: ${this.tokenConfig.customHeaderNames.join(', ')}`);
+          console.log(`      值: ${token.substring(0, 20)}... (无前缀)`);
+        }
+      }
+      
+      // 方法3: URL参数 (SA-Token支持)
+      if (this.tokenConfig.useUrlParameter) {
+        const paramName = this.tokenConfig.urlParameterName || 'Authorization';
+        const separator = fullUrl.includes('?') ? '&' : '?';
+        const tokenValue = this.tokenConfig.tokenPrefix 
+          ? `${this.tokenConfig.tokenPrefix} ${token}`
+          : token;
+        fullUrl = `${fullUrl}${separator}${paramName}=${encodeURIComponent(tokenValue)}`;
+        
+        if (this.tokenConfig.enableDebugLogs) {
+          console.log(`   ✅ [Method 3] URL Parameter`);
+          console.log(`      参数名: ${paramName}`);
+          console.log(`      完整URL: ${fullUrl.substring(0, 100)}...`);
+        }
+      }
+      
+      if (this.tokenConfig.enableDebugLogs) {
+        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+      }
     } else {
-      console.log(`📡 [第三层] API请求 - 无token（匿名请求）`);
-      console.log(`   请求: ${method} ${url}`);
+      console.log(`📡 [Token Injection] 无token（匿名请求）`);
+      console.log(`   请求: ${method} ${url}\n`);
     }
 
-    // 🆕 准备请求配置（添加clientId）
+    // 🎯 添加ClientId Header (SA-Token必需)
+    if (this.tokenConfig.includeClientId) {
+      requestHeaders[this.tokenConfig.clientIdHeaderName] = this.clientId;
+      
+      if (this.tokenConfig.enableDebugLogs && token) {
+        console.log(`🔑 [ClientId] 已添加ClientId Header`);
+        console.log(`   Header: ${this.tokenConfig.clientIdHeaderName}: ${this.clientId}`);
+        console.log(`   说明: 必须与登录时的clientType一致！\n`);
+      }
+    }
+
+    // 🆕 准备请求配置
     const requestConfig: RequestInit = {
       method,
-      headers: {
-        ...this.defaultHeaders,
-        ...headers,
-        'X-Client-Id': this.clientId,  // 🆕 添加客户端ID到header（对应后端 LoginHelper.CLIENT_KEY）
-      },
+      headers: requestHeaders,
     };
 
     // 添加请求体
@@ -416,7 +551,16 @@ class ApiClient {
       try {
         requestConfig.signal = controller.signal;
         
+        console.log(`\n🚀 [FETCH] 发送HTTP请求...`);
+        console.log(`   URL: ${fullUrl}`);
+        console.log(`   Method: ${method}`);
+        console.log(`   Headers:`, Object.keys(requestConfig.headers || {}));
+        
         const response = await fetch(fullUrl, requestConfig);
+        
+        console.log(`\n✅ [FETCH] 收到HTTP响应`);
+        console.log(`   状态码: ${response.status} ${response.statusText}`);
+        console.log(`   Content-Type: ${response.headers.get('content-type')}`);
         
         clearTimeout(timeoutId);
 
@@ -439,7 +583,61 @@ class ApiClient {
         if (contentType && contentType.includes('application/json')) {
           responseData = await response.json();
         } else {
-          responseData = await response.text();
+          // 🔧 修复：即使Content-Type是text/plain，也尝试解析为JSON
+          const textData = await response.text();
+          try {
+            responseData = JSON.parse(textData);
+            console.log('✅ [API CLIENT] 成功将text/plain响应解析为JSON');
+          } catch (e) {
+            // 如果不是JSON，保持为文本
+            responseData = textData;
+            console.log('ℹ️ [API CLIENT] 响应是纯文本，不是JSON');
+          }
+        }
+
+        // 🔥 修复：检查是否双重JSON包装（data字段是字符串）
+        if (responseData.data && typeof responseData.data === 'string') {
+          try {
+            console.log('\n⚠️ [API CLIENT] 检测到双重JSON包装');
+            console.log('   原始data类型:', typeof responseData.data);
+            console.log('   原始data内容:', responseData.data.substring(0, 100));
+            
+            const innerData = JSON.parse(responseData.data);
+            console.log('   解析后的内部data:', innerData);
+            
+            // 检查内部的业务状态码
+            if (innerData.code === 401) {
+              console.log('   ❌ 内部返回 401 认证失败');
+              console.log('   触发401错误处理流程\n');
+              
+              // 抛出401错误，触发自动刷新token逻辑
+              const error = handleHttpError(401, innerData.msg || '认证失败');
+              (error as any).status = 401;
+              throw error;
+            }
+            
+            // 如果内部有其他错误码，也要处理
+            if (innerData.code && innerData.code !== 200) {
+              console.log(`   ⚠️ 内部返回错误码: ${innerData.code}`);
+              throw createError(
+                ERROR_TYPES.SERVER_ERROR,
+                innerData.msg || '请求失败',
+                innerData.code
+              );
+            }
+            
+            // 使用解析后的内部数据
+            responseData.data = innerData.data;
+            console.log('   ✅ 成功解析双重JSON，使用内部数据\n');
+          } catch (parseError) {
+            // 如果不是有效的JSON，保持原样
+            if (parseError instanceof SyntaxError) {
+              console.log('   ℹ️ data字段不是JSON，保持原样\n');
+            } else {
+              // 重新抛出其他错误（如401错误）
+              throw parseError;
+            }
+          }
         }
 
         // 检查业务状态码
@@ -505,7 +703,16 @@ class ApiClient {
 
   // GET请求
   async get<T>(url: string, config?: RequestConfig): Promise<ApiResponse<T>> {
-    return this.makeRequest<T>(url, { ...config, method: 'GET' });
+    console.log('\n🔥🔥🔥 [API CLIENT] GET 请求被调用');
+    console.log('🔥 URL:', url);
+    console.log('🔥 Config:', config);
+    
+    const result = await this.makeRequest<T>(url, { ...config, method: 'GET' });
+    
+    console.log('🔥 [API CLIENT] GET 请求完成');
+    console.log('🔥 成功:', result.success);
+    
+    return result;
   }
 
   // POST请求
@@ -568,9 +775,12 @@ class ApiClient {
 // 创建并导出API客户端实例
 export const apiClient = new ApiClient();
 
-// 导出类型
+// 导出类型 (TokenTransmissionConfig已在定义时导出)
 export type { ApiError, ApiResponse, RequestConfig };
 
 // 导出错误类型常量
-    export { ERROR_TYPES, HTTP_STATUS };
+  export { ERROR_TYPES, HTTP_STATUS };
+
+// 导出Token配置常量（方便外部使用）
+  export { DEFAULT_TOKEN_CONFIG };
 

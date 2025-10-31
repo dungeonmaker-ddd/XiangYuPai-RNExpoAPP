@@ -128,8 +128,9 @@ class AuthAPI {
     });
 
     try {
-      // 直接使用后端接口格式
-      const response = await apiClient.post<RResponse<LoginResultVO>>(
+      // ✅ client.ts会自动转换后端的RResponse<T>为ApiResponse<T>
+      // 所以这里泛型直接用LoginResultVO即可
+      const response = await apiClient.post<LoginResultVO>(
         '/xypai-auth/api/v1/auth/login',
         {
           username: request.username,
@@ -140,24 +141,21 @@ class AuthAPI {
         }
       );
 
-      // 转换为统一格式
-      const result: ApiResponse<LoginResultVO> = {
-        data: response.data.data,
-        code: response.data.code,
-        message: response.data.msg,
-        timestamp: Date.now(),
-        success: response.data.code === 0,
-      };
-
-      // 登录成功后自动设置token
-      if (result.success && result.data.accessToken) {
-        apiClient.setAuthToken(result.data.accessToken);
+      // ✅ client.ts已经做了转换，response就是ApiResponse<LoginResultVO>格式
+      // 直接返回，不需要二次转换！
+      if (response.success && response.data?.accessToken) {
+        apiClient.setAuthToken(response.data.accessToken);
         console.log('✅ [AuthAPI] 登录成功，已自动设置token');
       }
 
-      return result;
-    } catch (error) {
-      console.error('❌ [AuthAPI] 密码登录失败:', error);
+      return response;
+    } catch (error: any) {
+      console.error('❌ [AuthAPI] 密码登录失败');
+      console.error('   错误类型:', error?.name || 'Unknown');
+      console.error('   错误信息:', error?.message || error);
+      console.error('   响应状态:', error?.response?.status);
+      console.error('   响应数据:', error?.response?.data);
+      console.error('   完整错误:', JSON.stringify(error, null, 2));
       throw error;
     }
   }
@@ -184,7 +182,7 @@ class AuthAPI {
     });
 
     try {
-      const response = await apiClient.post<RResponse<LoginResultVO>>(
+      const response = await apiClient.post<LoginResultVO>(
         '/xypai-auth/api/v1/auth/login/sms',
         {
           mobile: request.mobile,
@@ -195,21 +193,13 @@ class AuthAPI {
         }
       );
 
-      const result: ApiResponse<LoginResultVO> = {
-        data: response.data.data,
-        code: response.data.code,
-        message: response.data.msg,
-        timestamp: Date.now(),
-        success: response.data.code === 0,
-      };
-
-      // 自动设置token
-      if (result.success && result.data.accessToken) {
-        apiClient.setAuthToken(result.data.accessToken);
-        console.log('✅ [AuthAPI] 登录成功，已自动设置token');
+      // ✅ client.ts已经转换，直接使用response
+      if (response.success && response.data?.accessToken) {
+        apiClient.setAuthToken(response.data.accessToken);
+        console.log('✅ [AuthAPI] 短信登录成功，已自动设置token');
       }
 
-      return result;
+      return response;
     } catch (error) {
       console.error('❌ [AuthAPI] 短信登录失败:', error);
       throw error;
@@ -232,27 +222,19 @@ class AuthAPI {
     try {
       const queryParams = buildQueryParams({ refreshToken });
       
-      const response = await apiClient.post<RResponse<LoginResultVO>>(
+      const response = await apiClient.post<LoginResultVO>(
         `/xypai-auth/api/v1/auth/refresh?${queryParams}`,
         {},
         { retry: false }  // 刷新token失败不重试
       );
 
-      const result: ApiResponse<LoginResultVO> = {
-        data: response.data.data,
-        code: response.data.code,
-        message: response.data.msg,
-        timestamp: Date.now(),
-        success: response.data.code === 0,
-      };
-
-      // 自动设置新token
-      if (result.success && result.data.accessToken) {
-        apiClient.setAuthToken(result.data.accessToken);
+      // ✅ client.ts已经转换，直接使用response
+      if (response.success && response.data?.accessToken) {
+        apiClient.setAuthToken(response.data.accessToken);
         console.log('✅ [AuthAPI] Token刷新成功');
       }
 
-      return result;
+      return response;
     } catch (error) {
       console.error('❌ [AuthAPI] Token刷新失败:', error);
       throw error;
@@ -273,26 +255,18 @@ class AuthAPI {
     console.log('🚪 [AuthAPI] 登出请求');
 
     try {
-      const response = await apiClient.post<RResponse<void>>(
+      const response = await apiClient.post<void>(
         '/xypai-auth/api/v1/auth/logout',
         {}
       );
 
-      const result: ApiResponse<void> = {
-        data: response.data.data,
-        code: response.data.code,
-        message: response.data.msg,
-        timestamp: Date.now(),
-        success: response.data.code === 0,
-      };
-
-      // 清除本地token
-      if (result.success) {
+      // ✅ client.ts已经转换，直接使用response
+      if (response.success) {
         apiClient.clearAuthToken();
         console.log('✅ [AuthAPI] 登出成功，已清除token');
       }
 
-      return result;
+      return response;
     } catch (error) {
       console.error('❌ [AuthAPI] 登出失败:', error);
       // 即使登出失败也清除本地token
@@ -322,7 +296,7 @@ class AuthAPI {
     });
 
     try {
-      const response = await apiClient.post<RResponse<string>>(
+      const response = await apiClient.post<string>(
         '/xypai-auth/api/v1/auth/sms/send',
         {
           mobile: request.mobile,
@@ -331,19 +305,12 @@ class AuthAPI {
         }
       );
 
-      const result: ApiResponse<string> = {
-        data: response.data.data,
-        code: response.data.code,
-        message: response.data.msg,
-        timestamp: Date.now(),
-        success: response.data.code === 0,
-      };
-
-      if (result.success) {
+      // ✅ client.ts已经转换，直接使用response
+      if (response.success) {
         console.log('✅ [AuthAPI] 验证码发送成功');
       }
 
-      return result;
+      return response;
     } catch (error) {
       console.error('❌ [AuthAPI] 验证码发送失败:', error);
       throw error;
@@ -366,20 +333,13 @@ class AuthAPI {
     try {
       const queryParams = buildQueryParams({ mobile, code });
       
-      const response = await apiClient.post<RResponse<boolean>>(
+      const response = await apiClient.post<boolean>(
         `/xypai-auth/api/v1/auth/sms/verify?${queryParams}`,
         {}
       );
 
-      const result: ApiResponse<boolean> = {
-        data: response.data.data,
-        code: response.data.code,
-        message: response.data.msg,
-        timestamp: Date.now(),
-        success: response.data.code === 0,
-      };
-
-      return result;
+      // ✅ client.ts已经转换，直接使用response
+      return response;
     } catch (error) {
       console.error('❌ [AuthAPI] 验证码验证失败:', error);
       throw error;
@@ -402,19 +362,12 @@ class AuthAPI {
     try {
       const queryParams = buildQueryParams({ accessToken });
       
-      const response = await apiClient.get<RResponse<Record<string, any>>>(
+      const response = await apiClient.get<Record<string, any>>(
         `/xypai-auth/api/v1/auth/verify?${queryParams}`
       );
 
-      const result: ApiResponse<Record<string, any>> = {
-        data: response.data.data,
-        code: response.data.code,
-        message: response.data.msg,
-        timestamp: Date.now(),
-        success: response.data.code === 0,
-      };
-
-      return result;
+      // ✅ client.ts已经转换，直接使用response
+      return response;
     } catch (error) {
       console.error('❌ [AuthAPI] Token验证失败:', error);
       throw error;
@@ -435,20 +388,13 @@ class AuthAPI {
     console.log('💓 [AuthAPI] 心跳保活');
 
     try {
-      const response = await apiClient.post<RResponse<Record<string, any>>>(
+      const response = await apiClient.post<Record<string, any>>(
         '/xypai-auth/api/v1/auth/heartbeat',
         {}
       );
 
-      const result: ApiResponse<Record<string, any>> = {
-        data: response.data.data,
-        code: response.data.code,
-        message: response.data.msg,
-        timestamp: Date.now(),
-        success: response.data.code === 0,
-      };
-
-      return result;
+      // ✅ client.ts已经转换，直接使用response
+      return response;
     } catch (error) {
       console.error('❌ [AuthAPI] 心跳保活失败:', error);
       throw error;

@@ -30,7 +30,7 @@ import {
   StatusBar,
   StyleSheet,
   Text,
-  View,
+  View
 } from 'react-native';
 
 // Store
@@ -43,13 +43,11 @@ import { COLORS } from './constants';
 import type { MainPageProps } from './types';
 
 // 区域组件
-import BackgroundArea from './BackgroundArea';
 import ProfileSkeleton from './ProfileSkeleton';
-import SocialStatsArea from './SocialStatsArea';
 import TabContentArea from './TabContentArea';
 import TabNavigationArea from './TabNavigationArea';
 import UnauthenticatedArea from './UnauthenticatedArea';
-import UserInfoArea from './UserInfoArea';
+import UnifiedHeaderArea from './UnifiedHeaderArea';
 // #endregion
 
 // #region 3. Types & Schema
@@ -98,20 +96,30 @@ const useMainPageState = (props: MainPageProps) => {
   
   // 🆕 加载用户资料 - 只在已登录时加载
   useEffect(() => {
-    console.log('\n📱 MainPage - 检查认证状态');
+    console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('📱 MainPage - 用户资料加载检查');
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     console.log('   是否已初始化:', isInitialized);
     console.log('   是否已登录:', isAuthenticated);
-    console.log('   用户ID:', props.userId || 'current-user');
-    console.log('   是否本人:', isOwnProfile);
+    console.log('   传入的 userId:', props.userId || '(未传入)');
+    console.log('   是否本人主页:', isOwnProfile);
+    console.log('   当前用户信息:', currentProfile ? `已加载 (${currentProfile.nickname})` : '未加载');
     
     // 🎯 只有在已登录时才加载用户资料
     if (isInitialized && isAuthenticated) {
-      console.log('   ✅ 已登录，开始加载用户资料');
+      console.log('   ✅ 已登录，准备加载用户资料');
+      console.log('   📊 调用 loadUserProfile:', props.userId || '(当前用户)');
+      
+      // 🔥 强制加载，即使已有数据
+      console.log('   🚀 [DEBUG] 开始执行 loadUserProfile...');
       loadUserProfile(props.userId);
+      console.log('   🚀 [DEBUG] loadUserProfile 调用完成（异步）');
     } else if (isInitialized && !isAuthenticated) {
       console.log('   ⚠️ 未登录，跳过加载资料');
     }
-  }, [props.userId, isInitialized, isAuthenticated, loadUserProfile]);
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+  }, [props.userId, isInitialized, isAuthenticated]);
+  // ⚠️ 移除 loadUserProfile 依赖，避免无限循环
   
   return {
     activeTab,
@@ -289,39 +297,31 @@ const MainPage: React.FC<MainPageProps> = (props) => {
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
       
+      {/* ✨ 整页滚动容器 - 支持整个页面上下滚动 */}
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
-        stickyHeaderIndices={[2]}  // Tab栏吸顶
+        bounces={true}
+        scrollEventThrottle={16}
       >
-        {/* 背景头图区域 */}
-        <BackgroundArea
-          imageUrl={userInfo.backgroundImage}
-          avatarUrl={userInfo.avatar}
-          onBack={handleBack}
-          onEdit={handleEditPress}
-          showEditButton={isOwnProfile}
-        />
-        
-        {/* 用户信息区域 */}
-        <UserInfoArea
-          userInfo={userInfo}
+        {/* ✨ 统一的现代化背景头图区域（嵌套化架构 v2.0） */}
+        {/* 包含：背景图 + 顶部操作栏 + 用户信息卡片（姓名/性别/标签/状态） */}
+        <UnifiedHeaderArea
+          backgroundImage={userInfo.backgroundImage}
+          nickname={userInfo.nickname}
+          gender={userInfo.gender === 'male' ? 1 : userInfo.gender === 'female' ? 2 : undefined}
+          age={userInfo.age}
+          isRealVerified={userInfo.isRealVerified}
+          isGodVerified={userInfo.isGodVerified}
+          isVipVerified={userInfo.isVip}
+          isOnline={true} // TODO: 从后端获取在线状态
+          distance={userInfo.distance}
+          followerCount={userInfo.followerCount}
           isOwnProfile={isOwnProfile}
           onEditPress={handleEditPress}
           onFollowPress={handleFollowPress}
-          onAvatarPress={handleAvatarPress}
-        />
-        
-        {/* 社交数据区域 */}
-        <SocialStatsArea
-          followingCount={userInfo.followingCount || 0}
-          followerCount={userInfo.followerCount || 0}
-          likeCount={userInfo.likeCount || 0}
-          collectCount={userInfo.collectCount || 0}
-          onFollowingPress={handleFollowingPress}
-          onFollowerPress={handleFollowerPress}
-          onLikePress={handleLikePress}
+          onBack={handleBack}
         />
         
         {/* Tab标签栏 */}
@@ -331,11 +331,13 @@ const MainPage: React.FC<MainPageProps> = (props) => {
         />
         
         {/* Tab内容区域 */}
-        <TabContentArea
-          activeTab={activeTab}
-          userId={userInfo.id}
-          isOwnProfile={isOwnProfile}
-        />
+        <View style={styles.tabContent}>
+          <TabContentArea
+            activeTab={activeTab}
+            userId={userInfo.id}
+            isOwnProfile={isOwnProfile}
+          />
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -352,7 +354,11 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    flexGrow: 1,
+    // 不设置 flex:1，让内容自然撑开高度
+  },
+  tabContent: {
+    // 移除 flex: 1，让内容自适应高度
+    minHeight: 400, // 最小高度确保有足够空间显示内容
   },
   loading: {
     flex: 1,

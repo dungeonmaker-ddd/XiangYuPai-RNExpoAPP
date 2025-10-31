@@ -9,16 +9,17 @@
 // #endregion
 
 // #region 2. Imports
+import { useProfileStore } from '@/stores/profileStore';
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
 import { COLORS } from '../constants';
 import type { TabContentAreaProps } from '../types';
 
-// Tab内容页面
-import CollectionPage from '../../CollectionPage';
-import DynamicPage from '../../DynamicPage';
-import LikesPage from '../../LikesPage';
-import ProfileInfoPage from '../../ProfileInfoPage';
+// Tab内容组件
+import CollectionContent from './CollectionContent';
+import DynamicContent from './DynamicContent';
+import LikesContent from './LikesContent';
+import ProfileContent from './ProfileContent';
 // #endregion
 
 // #region 3-7. Types, Constants, Utils, State & Logic
@@ -29,22 +30,71 @@ import ProfileInfoPage from '../../ProfileInfoPage';
 const TabContentArea: React.FC<TabContentAreaProps> = ({
   activeTab,
   userId,
-  isOwnProfile,
+  posts,
+  loading,
+  onPostPress,
+  onUserPress,
+  onLoadMore,
   style,
 }) => {
+  // 从 profileStore 获取完整用户资料和技能列表
+  const currentProfile = useProfileStore((state) => state.currentProfile);
+  const skills = []; // TODO: 从 profileStore 或 API 获取技能列表
+
+  // 判断是否是本人主页（从 props 推断）
+  const isOwnProfile = !userId || userId === currentProfile?.id;
+
   return (
     <View style={[styles.container, style]}>
-      {activeTab === 'profile' && (
-        <ProfileInfoPage userId={userId} isOwnProfile={isOwnProfile} />
-      )}
+      {/* 动态Tab */}
       {activeTab === 'dynamic' && (
-        <DynamicPage userId={userId} />
+        <DynamicContent
+          posts={posts}
+          loading={loading}
+          onPostPress={onPostPress}
+          onLoadMore={onLoadMore}
+        />
       )}
+
+      {/* 收藏Tab */}
       {activeTab === 'collection' && (
-        <CollectionPage userId={userId} />
+        <CollectionContent
+          posts={posts}
+          loading={loading}
+          onPostPress={onPostPress}
+          onLoadMore={onLoadMore}
+        />
       )}
+
+      {/* 点赞Tab */}
       {activeTab === 'likes' && (
-        <LikesPage userId={userId} />
+        <LikesContent
+          posts={posts}
+          loading={loading}
+          onPostPress={onPostPress}
+          onLoadMore={onLoadMore}
+        />
+      )}
+
+      {/* 资料Tab */}
+      {activeTab === 'profile' && currentProfile && (
+        <ProfileContent
+          userInfo={currentProfile}
+          skills={skills}
+          isOwnProfile={isOwnProfile}
+          onSkillPress={(skillId) => {
+            console.log('查看技能详情:', skillId);
+            // TODO: 跳转到技能详情页
+          }}
+          onAddSkillPress={() => {
+            console.log('添加技能');
+            // TODO: 跳转到技能添加页
+          }}
+          onEditInfoPress={() => {
+            console.log('编辑个人资料');
+            // TODO: 跳转到资料编辑页
+          }}
+        />
       )}
     </View>
   );

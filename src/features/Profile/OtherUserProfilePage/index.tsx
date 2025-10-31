@@ -45,7 +45,7 @@ import navigateToMessage from './navigateToMessage';
 import onOtherUserProfileShare from './onOtherUserProfileShare';
 
 // Constants
-import { COLORS, SPACING } from './constants';
+import { COLORS, SIZES, SPACING } from './constants';
 
 // Types
 import type { OtherUserProfilePageProps } from './types';

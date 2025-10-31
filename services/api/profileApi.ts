@@ -210,9 +210,31 @@ class ProfileAPI {
    * GET /api/v2/user/profile/{userId}
    */
   async getUserProfile(userId: number): Promise<UserProfileVO> {
+    console.log('\n🔥🔥🔥 [PROFILE API] getUserProfile 被调用');
+    console.log('🔥 参数 userId:', userId);
+    console.log('🔥 请求 URL:', `${API_ENDPOINTS.PROFILE.USER_PROFILE}/${userId}`);
+    
     const response = await apiClient.get<UserProfileVO>(
       `${API_ENDPOINTS.PROFILE.USER_PROFILE}/${userId}`
     );
+    
+    console.log('🔥 [PROFILE API] getUserProfile 响应成功');
+    console.log('🔥 响应数据:', response.data ? '有数据' : '无数据');
+    
+    // 🔥 打印实际的响应数据结构（关键诊断）
+    console.log('\n🔥🔥🔥🔥🔥 [关键诊断] 实际响应数据:');
+    console.log('🔥 完整响应:', JSON.stringify(response, null, 2));
+    console.log('🔥 response.data 类型:', typeof response.data);
+    console.log('🔥 response.data 内容:', JSON.stringify(response.data, null, 2));
+    
+    if (response.data) {
+      console.log('🔥 response.data.nickname:', response.data.nickname);
+      console.log('🔥 response.data.userId:', response.data.userId);
+      console.log('🔥 response.data.stats:', response.data.stats);
+      console.log('🔥 Object.keys(response.data):', Object.keys(response.data));
+    }
+    console.log('🔥🔥🔥🔥🔥\n');
+    
     return response.data;
   }
   
@@ -221,9 +243,16 @@ class ProfileAPI {
    * GET /api/v2/user/profile/current
    */
   async getCurrentUserProfile(): Promise<UserProfileVO> {
+    console.log('\n🔥🔥🔥 [PROFILE API] getCurrentUserProfile 被调用');
+    console.log('🔥 请求 URL:', API_ENDPOINTS.PROFILE.CURRENT_PROFILE);
+    
     const response = await apiClient.get<UserProfileVO>(
       API_ENDPOINTS.PROFILE.CURRENT_PROFILE
     );
+    
+    console.log('🔥 [PROFILE API] getCurrentUserProfile 响应成功');
+    console.log('🔥 响应数据:', response.data ? '有数据' : '无数据');
+    
     return response.data;
   }
   

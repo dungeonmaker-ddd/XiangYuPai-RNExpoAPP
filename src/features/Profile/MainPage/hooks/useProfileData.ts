@@ -51,6 +51,7 @@ export interface UseProfileDataReturn {
   // 认证状态
   isAuthenticated: boolean;
   isInitialized: boolean;
+  authUserInfo: ReturnType<typeof useAuthStore>['userInfo'];  // 🆕 基础用户信息
   
   // 派生状态（计算得出）
   isOwnProfile: boolean;
@@ -95,18 +96,28 @@ export const useProfileData = (params: UseProfileDataParams = {}): UseProfileDat
   const loading = useProfileStore((state) => state.loading);
   const error = useProfileStore((state) => state.error);
   
-  // 从AuthStore获取认证状态
+  // 从AuthStore获取认证状态和用户信息
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const isInitialized = useAuthStore((state) => state.isInitialized);
+  const authUserInfo = useAuthStore((state) => state.userInfo);
   
   // ===== 派生状态计算 =====
   /**
    * 判断是否是当前用户的主页
-   * 算法：没有userId 或 userId是'current-user' → 本人主页
+   * 算法：
+   * 1. 没有传userId → 本人主页
+   * 2. userId是'current-user' → 本人主页
+   * 3. userId === authStore.userInfo.id → 本人主页
+   * 4. 其他情况 → 他人主页
    */
   const isOwnProfile = useMemo(
-    () => !userId || userId === 'current-user',
-    [userId]
+    () => {
+      if (!userId || userId === 'current-user') {
+        return true;
+      }
+      return authUserInfo?.id === userId;
+    },
+    [userId, authUserInfo?.id]
   );
   
   /**
@@ -137,6 +148,7 @@ export const useProfileData = (params: UseProfileDataParams = {}): UseProfileDat
     // 认证状态
     isAuthenticated,
     isInitialized,
+    authUserInfo,  // 🆕 基础用户信息（来自authStore）
     
     // 派生状态
     isOwnProfile,

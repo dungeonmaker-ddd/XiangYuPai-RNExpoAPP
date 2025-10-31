@@ -3,81 +3,73 @@
  * 统一管理首页所有导航逻辑
  */
 
+import { useRouter } from 'expo-router';
 import { useCallback } from 'react';
-import { Linking } from 'react-native';
 import type { UserCard } from './types';
 
 /**
  * 首页导航管理Hook
+ * @deprecated navigation parameter - now uses expo-router internally
  */
 export const useHomeNavigation = (navigation?: any) => {
-  // 用户点击处理
+  const router = useRouter();
+  
+  // 用户点击处理 - 跳转到其他用户完整主页
   const handleUserPress = useCallback((user: UserCard) => {
-    if (navigation) {
-      navigation.navigate('UserDetail', { userId: user.id });
-    } else {
-      console.log('Navigate to user detail:', user.id);
-    }
-  }, [navigation]);
+    console.log('[useHomeNavigation] 🧭 导航: 首页 → 其他用户主页', { userId: user.id });
+    router.push({
+      pathname: '/profile/[userId]',
+      params: { userId: user.id },
+    });
+  }, [router]);
 
-  // 功能点击处理
+  // 功能点击处理 - 跳转到服务详情页
   const handleFunctionPress = useCallback((functionId: string) => {
-    if (navigation) {
-      navigation.navigate('FunctionDetail', { functionId });
-    } else {
-      console.log('Navigate to function detail:', functionId);
-    }
-  }, [navigation]);
+    console.log('[useHomeNavigation] 🧭 导航: 首页 → 服务详情', { functionId });
+    router.push({
+      pathname: '/(tabs)/homepage/service-detail',
+      params: { serviceType: functionId },
+    });
+  }, [router]);
 
-  // 位置点击处理
+  // 位置点击处理 - 跳转到位置选择页
   const handleLocationPress = useCallback(() => {
-    if (navigation) {
-      navigation.navigate('LocationSelector');
-    } else {
-      console.log('Open location selector - navigation not available');
-    }
-  }, [navigation]);
+    console.log('[useHomeNavigation] 🧭 导航: 首页 → 位置选择');
+    router.push('/(tabs)/homepage/location');
+  }, [router]);
 
-  // 更多组队聚会处理
+  // 更多组队聚会处理 - 跳转到组局中心
   const handleMoreTeamPartyPress = useCallback(() => {
-    if (navigation) {
-      navigation.navigate('GroupCenter');
-    } else {
-      console.log('Navigate to group center (navigation not available)');
-    }
-  }, [navigation]);
+    console.log('[useHomeNavigation] 🧭 导航: 首页 → 组局中心');
+    router.push('/(tabs)/homepage/event-center');
+  }, [router]);
 
-  // 游戏横幅点击处理
+  // 游戏横幅点击处理 - 跳转到服务详情页
   const handleGameBannerPress = useCallback(() => {
-    Linking.openURL('https://apps.apple.com/app/example');
-  }, []);
+    console.log('[useHomeNavigation] 🧭 导航: 首页 → 游戏服务详情');
+    router.push({
+      pathname: '/(tabs)/homepage/service-detail',
+      params: { serviceType: 'game' },
+    });
+  }, [router]);
 
-  // 组队聚会点击处理
+  // 组队聚会点击处理 - 跳转到组局中心
   const handleTeamPartyPress = useCallback(() => {
-    if (navigation) {
-      navigation.navigate('GroupCenter');
-    } else {
-      console.log('Navigate to group center (navigation not available)');
-    }
-  }, [navigation]);
+    console.log('[useHomeNavigation] 🧭 导航: 首页 → 组局中心');
+    router.push('/(tabs)/homepage/event-center');
+  }, [router]);
 
-  // 更多专享处理
+  // 更多专享处理 - 跳转到限时专享列表
   const handleMoreOffersPress = useCallback(() => {
-    if (navigation) {
-      navigation.navigate('LimitedOffers');
-    } else {
-      console.log('Navigate to more offers');
-    }
-  }, [navigation]);
+    console.log('[useHomeNavigation] 🧭 导航: 首页 → 限时专享列表');
+    router.push('/(tabs)/homepage/featured');
+  }, [router]);
 
-  // 搜索点击处理
+  // 搜索点击处理 - 跳转到搜索页
   const handleSearchPress = useCallback(() => {
-    if (navigation) {
-      navigation.navigate('Search');
-    } else {
-      console.log('Navigate to search - navigation not available');
-    }
-  }, [navigation]);
+    console.log('[useHomeNavigation] 🧭 导航: 首页 → 搜索页');
+    router.push('/(tabs)/homepage/search');
+  }, [router]);
 
   return {
     handleUserPress,

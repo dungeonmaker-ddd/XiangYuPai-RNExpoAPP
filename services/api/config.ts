@@ -22,10 +22,10 @@ const getDevApiUrl = (): string => {
   
   // 根据平台自动选择
   if (Platform.OS === 'android') {
-    // Android模拟器访问主机的特殊IP
-    // 10.0.2.2 是Android模拟器访问主机的魔法地址
-    console.log('[API Config] 🤖 检测到Android环境，使用 10.0.2.2:8080 访问主机');
-    return 'http://10.0.2.2:8080';
+    // 🔧 使用主机实际IP（10.0.2.2映射不稳定）
+    console.log('[API Config] 🤖 检测到Android环境，使用主机实际IP: 192.168.1.108:8080');
+    return 'http://192.168.1.108:8080';
+    // return 'http://10.0.2.2:8080';  // ❌ 映射不稳定，已禁用
   } else if (Platform.OS === 'ios') {
     // iOS模拟器可以直接使用localhost
     console.log('[API Config] 🍎 检测到iOS环境，使用 localhost:8080');
@@ -103,8 +103,8 @@ export const API_ENDPOINTS = {
   // ⚠️ 注意：通过网关访问需要加 /xypai-user 前缀
   PROFILE: {
     // 用户资料查询
-    USER_PROFILE: '/xypai-user/api/v2/user/profile',           // GET/PUT /{userId}
-    CURRENT_PROFILE: '/xypai-user/api/v2/user/profile/current', // GET/PUT
+    USER_PROFILE: '/xypai-user/api/v1/user/profile',           // GET/PUT /{userId}
+    CURRENT_PROFILE: '/xypai-user/api/v1/user/profile/current', // GET/PUT
     
     // 在线状态
     ONLINE_STATUS: '/xypai-user/api/v2/user/profile/:userId/online-status', // PUT

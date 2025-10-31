@@ -6,16 +6,24 @@
  * - 动态列表数据
  * - Tab状态
  * - 加载和错误状态
+ * 
+ * 🔗 数据源集成：
+ * - authStore.userInfo: 基础身份信息（登录时保存）
+ * - profileStore.currentProfile: 完整资料信息（从API加载）
+ * - 使用 authStore.userInfo.id 确定当前用户
  */
 
 import { create } from 'zustand';
 import type { Post, TabType, UserProfile } from '../src/features/Profile/types';
 
 // API服务
-import { mockProfileApi, profileApi } from '../services/api/profileApi';
+import { profileApi } from '../services/api/profileApi';
 
 // 数据转换工具
 import { profileDataTransform } from '../src/features/Profile/utils/dataTransform';
+
+// 🆕 导入authStore以获取当前用户信息
+import { useAuthStore } from '../src/features/AuthModule/stores/authStore';
 
 // #region 类型定义
 
@@ -56,6 +64,9 @@ export interface ProfileActions {
   // 用户信息
   loadUserProfile: (userId?: string) => Promise<void>;
   updateUserProfile: (updates: Partial<UserProfile>) => void;
+  
+  // 🆕 从authStore初始化基础信息
+  initializeFromAuth: () => void;
   
   // Tab操作
   setActiveTab: (tab: TabType) => void;
@@ -118,21 +129,38 @@ export const useProfileStore = create<ProfileStore>((set, get) => ({
   
   // 加载用户资料
   loadUserProfile: async (userId?: string) => {
+    // 🔥 第一个日志 - 确保函数被调用
+    console.log('\n🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥');
+    console.log('🔥 [PROFILE STORE] loadUserProfile 被调用！');
+    console.log('🔥 传入参数 userId:', userId || '(未传入)');
+    console.log('🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥\n');
+    
     try {
       set({ loading: true, error: null });
       
       console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
       console.log('🔄 加载用户资料开始');
-      console.log('   用户ID:', userId || 'current-user');
+      
+      // 🆕 智能用户ID解析
+      const authState = useAuthStore.getState();
+      const targetUserId = userId || authState.userInfo?.id;
+      
+      console.log('   传入userId:', userId || '未传入');
+      console.log('   authStore用户ID:', authState.userInfo?.id || '未登录');
+      console.log('   最终使用:', targetUserId || 'current-user');
       console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
       
-      // 🎯 调用真实API（开发环境使用Mock）
-      const api = __DEV__ ? mockProfileApi : profileApi;
+      // 🎯 使用真实后端API（获取测试账号数据）
+      console.log('🔥 准备调用 API...');
+      const api = profileApi;
       
-      const profileData = userId 
-        ? await api.getUserProfile(Number(userId))
+      console.log('🔥 开始执行 API 请求:', targetUserId ? `getUserProfile(${targetUserId})` : 'getCurrentUserProfile()');
+      
+      const profileData = targetUserId 
+        ? await api.getUserProfile(Number(targetUserId))
         : await api.getCurrentUserProfile();
       
+      console.log('🔥 API请求完成！');
       console.log('✅ API调用成功，获取到资料数据');
       console.log('   昵称:', profileData.nickname);
       console.log('   粉丝数:', profileData.stats?.followerCount);
@@ -143,6 +171,13 @@ export const useProfileStore = create<ProfileStore>((set, get) => ({
       console.log('✅ 数据转换完成');
       console.log('   前端ID:', profile.id);
       console.log('   关注数:', profile.followingCount);
+      
+      // 🆕 与authStore数据同步
+      if (!userId && authState.userInfo) {
+        console.log('🔗 同步基础信息到profile');
+        console.log('   手机号:', authState.userInfo.phone);
+        console.log('   认证状态:', authState.userInfo.verified);
+      }
       
       set({ currentProfile: profile, loading: false });
       
@@ -156,6 +191,38 @@ export const useProfileStore = create<ProfileStore>((set, get) => ({
         error: error instanceof Error ? error.message : '加载失败',
       });
     }
+  },
+  
+  // 🆕 从authStore初始化基础信息
+  initializeFromAuth: () => {
+    const authState = useAuthStore.getState();
+    
+    if (!authState.isAuthenticated || !authState.userInfo) {
+      console.log('⚠️ 未登录，跳过profile初始化');
+      return;
+    }
+    
+    console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('🔗 从authStore初始化profile基础信息');
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    
+    const { userInfo } = authState;
+    
+    // 创建基础profile（只包含authStore已有的信息）
+    const basicProfile: UserProfile = {
+      id: userInfo.id,
+      nickname: userInfo.nickname || '用户',
+      avatar: userInfo.avatar || 'https://via.placeholder.com/96',
+      // 其他字段从API加载时填充
+    };
+    
+    console.log('   用户ID:', basicProfile.id);
+    console.log('   昵称:', basicProfile.nickname);
+    console.log('   手机号:', userInfo.phone);
+    console.log('   认证状态:', userInfo.verified);
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+    
+    set({ currentProfile: basicProfile });
   },
   
   // 更新用户资料
@@ -220,7 +287,7 @@ export const useProfileStore = create<ProfileStore>((set, get) => ({
     try {
       console.log('🔄 关注用户:', targetUserId);
       
-      const api = __DEV__ ? mockProfileApi : profileApi;
+      const api = profileApi;
       await api.followUser(targetUserId);
       
       // 更新关系状态
@@ -243,7 +310,7 @@ export const useProfileStore = create<ProfileStore>((set, get) => ({
     try {
       console.log('🔄 取消关注:', targetUserId);
       
-      const api = __DEV__ ? mockProfileApi : profileApi;
+      const api = profileApi;
       await api.unfollowUser(targetUserId);
       
       // 更新关系状态
