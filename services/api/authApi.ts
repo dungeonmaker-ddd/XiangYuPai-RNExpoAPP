@@ -130,6 +130,7 @@ class AuthAPI {
     try {
       // ✅ client.ts会自动转换后端的RResponse<T>为ApiResponse<T>
       // 所以这里泛型直接用LoginResultVO即可
+      // 🔧 使用短超时且禁用重试 - 登录应该快速失败，避免卡死
       const response = await apiClient.post<LoginResultVO>(
         '/xypai-auth/api/v1/auth/login',
         {
@@ -138,6 +139,10 @@ class AuthAPI {
           clientType: request.clientType || 'app',
           deviceId: request.deviceId || `device_${Date.now()}`,
           rememberMe: request.rememberMe || false,
+        },
+        {
+          timeout: 5000,   // 🔧 5秒超时 - 快速失败
+          retry: false,    // 🔧 禁用重试 - 避免长时间卡死
         }
       );
 
@@ -156,6 +161,11 @@ class AuthAPI {
       console.error('   响应状态:', error?.response?.status);
       console.error('   响应数据:', error?.response?.data);
       console.error('   完整错误:', JSON.stringify(error, null, 2));
+      
+      // 🔧 改善错误消息
+      if (error?.type === 'NETWORK_ERROR' || error?.type === 'TIMEOUT_ERROR') {
+        throw new Error('网络连接失败，请检查网络后重试');
+      }
       throw error;
     }
   }
@@ -182,6 +192,7 @@ class AuthAPI {
     });
 
     try {
+      // 🔧 使用短超时且禁用重试 - 登录应该快速失败，避免卡死
       const response = await apiClient.post<LoginResultVO>(
         '/xypai-auth/api/v1/auth/login/sms',
         {
@@ -190,6 +201,10 @@ class AuthAPI {
           clientType: request.clientType || 'app',
           deviceId: request.deviceId || `device_${Date.now()}`,
           rememberMe: request.rememberMe || false,
+        },
+        {
+          timeout: 5000,   // 🔧 5秒超时 - 快速失败
+          retry: false,    // 🔧 禁用重试 - 避免长时间卡死
         }
       );
 
@@ -200,8 +215,13 @@ class AuthAPI {
       }
 
       return response;
-    } catch (error) {
+    } catch (error: any) {
       console.error('❌ [AuthAPI] 短信登录失败:', error);
+      
+      // 🔧 改善错误消息
+      if (error?.type === 'NETWORK_ERROR' || error?.type === 'TIMEOUT_ERROR') {
+        throw new Error('网络连接失败，请检查网络后重试');
+      }
       throw error;
     }
   }
@@ -296,12 +316,17 @@ class AuthAPI {
     });
 
     try {
+      // 🔧 使用短超时且禁用重试 - 发送验证码应该快速失败
       const response = await apiClient.post<string>(
         '/xypai-auth/api/v1/auth/sms/send',
         {
           mobile: request.mobile,
           type: request.type,
           clientType: request.clientType || 'app',
+        },
+        {
+          timeout: 5000,   // 🔧 5秒超时
+          retry: false,    // 🔧 禁用重试 - 用户可以手动重试
         }
       );
 
@@ -311,8 +336,13 @@ class AuthAPI {
       }
 
       return response;
-    } catch (error) {
+    } catch (error: any) {
       console.error('❌ [AuthAPI] 验证码发送失败:', error);
+      
+      // 🔧 改善错误消息
+      if (error?.type === 'NETWORK_ERROR' || error?.type === 'TIMEOUT_ERROR') {
+        throw new Error('网络连接失败，请检查网络后重试');
+      }
       throw error;
     }
   }

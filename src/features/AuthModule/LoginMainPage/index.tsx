@@ -28,27 +28,25 @@ import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    KeyboardAvoidingView,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
 } from 'react-native';
 
-// 🆕 新组件导入
-import {
-    ActionButtonArea,
-    AgreementArea,
-    AuthInputArea,
-    AuxiliaryArea,
-    RegionSelectModal,
-    TopWelcomeArea,
-    type Country,
-} from './components';
+// 🆕 子组件导入（扁平化结构）
+import ActionButtonArea from './ActionButtonArea';
+import AgreementArea from './AgreementArea';
+import AuthInputArea from './AuthInputArea';
+import AuxiliaryArea from './AuxiliaryArea';
+import RegionSelectModal from './RegionSelectModal';
+import TopWelcomeArea from './TopWelcomeArea';
+import type { Country } from './RegionSelectModal';
 
 // Shared components
 import { AuthSafeArea } from '../SharedComponents/Layout/AuthSafeArea';
@@ -61,10 +59,16 @@ import { authApi as backendAuthApi } from '../../../../services/api/authApi';
 
 // 🆕 凭证存储
 import {
-    clearCredentials,
-    getSavedCredentials,
-    saveCredentials
+  clearCredentials,
+  getSavedCredentials,
+  saveCredentials
 } from '../utils/credentialStorage';
+
+// 🔧 状态管理 Hooks
+import {
+  useCountdown,
+  useFormValidation
+} from './useLoginMainPage';
 // #endregion
 
 // #region 3. Types & Schema
@@ -97,81 +101,7 @@ const CONFIG = {
 } as const;
 // #endregion
 
-// #region 5. State Management
-/**
- * 表单验证Hook
- */
-const useFormValidation = (formData: LoginFormData, loginMode: LoginMode) => {
-  // 手机号验证（11位）
-  const phoneValid = formData.phoneNumber.length === CONFIG.PHONE_LENGTH;
-  
-  // 密码验证（6-20位，非纯数字）
-  const passwordValid = 
-    formData.password.length >= CONFIG.PASSWORD_MIN_LENGTH &&
-    formData.password.length <= CONFIG.PASSWORD_MAX_LENGTH &&
-    !/^\d+$/.test(formData.password);
-  
-  // 验证码验证（6位数字）
-  const codeValid = formData.verificationCode.length === CONFIG.CODE_LENGTH;
-  
-  // 登录按钮是否可用
-  const loginDisabled = loginMode === 'password' 
-    ? !phoneValid || !passwordValid
-    : !phoneValid || !codeValid;
-  
-  // 发送验证码按钮是否可用
-  const sendCodeDisabled = !phoneValid;
-  
-  return {
-    phoneValid,
-    passwordValid,
-    codeValid,
-    loginDisabled,
-    sendCodeDisabled,
-  };
-};
-
-/**
- * 倒计时Hook
- */
-const useCountdown = () => {
-  const [countdown, setCountdown] = useState(0);
-  const [timer, setTimer] = useState<ReturnType<typeof setInterval> | null>(null);
-  
-  const startCountdown = useCallback((seconds: number = CONFIG.COUNTDOWN_SECONDS) => {
-    setCountdown(seconds);
-    
-    const newTimer = setInterval(() => {
-      setCountdown(prev => {
-        if (prev <= 1) {
-          clearInterval(newTimer);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-    
-    setTimer(newTimer);
-  }, []);
-  
-  const stopCountdown = useCallback(() => {
-    if (timer) {
-      clearInterval(timer);
-      setTimer(null);
-    }
-    setCountdown(0);
-  }, [timer]);
-  
-  return {
-    countdown,
-    isCountingDown: countdown > 0,
-    startCountdown,
-    stopCountdown,
-  };
-};
-// #endregion
-
-// #region 6. Domain Logic
+// #region 5. Domain Logic
 /**
  * LoginMainPage 主组件
  */
@@ -197,6 +127,9 @@ const LoginMainPage: React.FC<LoginMainPageProps> = ({
   });
   const [agreementAccepted, setAgreementAccepted] = useState(false);
   const [regionModalVisible, setRegionModalVisible] = useState(false);
+  
+  // 🆕 取消登录控制器
+  const loginAbortControllerRef = React.useRef<{ cancelled: boolean }>({ cancelled: false });
   
   // 🆕 保存的凭证状态（用于快速登录）
   const [savedCredentials, setSavedCredentials] = useState<{

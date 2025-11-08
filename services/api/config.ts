@@ -24,8 +24,8 @@ const getDevApiUrl = (): string => {
   if (Platform.OS === 'android') {
     // 🔧 使用主机实际IP（10.0.2.2映射不稳定）
     console.log('[API Config] 🤖 检测到Android环境，使用主机实际IP: 192.168.1.108:8080');
-    return 'http://192.168.1.108:8080';
-    // return 'http://10.0.2.2:8080';  // ❌ 映射不稳定，已禁用
+    // return 'http://192.168.1.108:8080';
+    return 'http://10.0.2.2:8080';  // ❌ 映射不稳定，已禁用
   } else if (Platform.OS === 'ios') {
     // iOS模拟器可以直接使用localhost
     console.log('[API Config] 🍎 检测到iOS环境，使用 localhost:8080');

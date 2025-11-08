@@ -94,21 +94,44 @@ export class DiscoveryAPI {
    */
   async getHotContents(params: GetContentsParams = {}): Promise<ContentListVO[]> {
     const { type, limit = 20 } = params;
+    const queryParams = buildQueryParams({ type, limit });
+    const url = `/xypai-content/api/v1/discovery/hot${queryParams ? `?${queryParams}` : ''}`;
+    
+    console.log('\n📱 [DiscoveryAPI] ========== 开始获取热门内容 ==========');
+    console.log('📱 请求参数:', { type, limit });
+    console.log('📱 完整URL:', url);
+    
     try {
-      const queryParams = buildQueryParams({ type, limit });
-      const url = `/xypai-content/api/v1/discovery/hot${queryParams ? `?${queryParams}` : ''}`;
-      
       const response = await apiClient.get<ContentListVO[]>(url);
 
-      console.log('[DiscoveryAPI] 获取热门内容成功', {
-        count: response.data?.length || 0,
-        type,
-        limit
-      });
-
+      console.log('📱 [DiscoveryAPI] ========== 响应详情 ==========');
+      console.log('📱 success:', response.success);
+      console.log('📱 code:', response.code);
+      console.log('📱 message:', response.message);
+      console.log('📱 data类型:', Array.isArray(response.data) ? 'Array' : typeof response.data);
+      console.log('📱 data数量:', response.data?.length || 0);
+      
+      if (response.data && response.data.length > 0) {
+        console.log('📱 第一条数据样本:', JSON.stringify(response.data[0], null, 2));
+      } else {
+        console.warn('📱 ⚠️ 响应数据为空！');
+        console.warn('📱 可能原因:');
+        console.warn('   1. 数据库中没有数据');
+        console.warn('   2. status字段不是1或deleted字段不是0');
+        console.warn('   3. 后端查询条件过滤掉了所有数据');
+      }
+      
+      console.log('📱 ==============================================\n');
       return response.data || [];
-    } catch (error) {
-      console.error('[DiscoveryAPI] 获取热门内容失败', error);
+      
+    } catch (error: any) {
+      console.error('\n❌ [DiscoveryAPI] ========== 请求失败 ==========');
+      console.error('❌ 错误类型:', error.type || 'unknown');
+      console.error('❌ 错误信息:', error.message);
+      console.error('❌ 状态码:', error.code);
+      console.error('❌ 详细信息:', error.details);
+      console.error('❌ 完整错误对象:', error);
+      console.error('❌ ==============================================\n');
       return [];
     }
   }
