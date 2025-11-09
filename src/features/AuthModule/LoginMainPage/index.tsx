@@ -28,15 +28,15 @@ import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
-  Alert,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View
+    ActivityIndicator,
+    Alert,
+    KeyboardAvoidingView,
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View
 } from 'react-native';
 
 // 🆕 子组件导入（扁平化结构）
@@ -44,9 +44,9 @@ import ActionButtonArea from './ActionButtonArea';
 import AgreementArea from './AgreementArea';
 import AuthInputArea from './AuthInputArea';
 import AuxiliaryArea from './AuxiliaryArea';
+import type { Country } from './RegionSelectModal';
 import RegionSelectModal from './RegionSelectModal';
 import TopWelcomeArea from './TopWelcomeArea';
-import type { Country } from './RegionSelectModal';
 
 // Shared components
 import { AuthSafeArea } from '../SharedComponents/Layout/AuthSafeArea';
@@ -54,20 +54,21 @@ import { AuthSafeArea } from '../SharedComponents/Layout/AuthSafeArea';
 // Store imports
 import { useAuthStore } from '../stores/authStore';
 
-// 🆕 真实后端API
+// ========== ✅ 导入真实后端API ==========
 import { authApi as backendAuthApi } from '../../../../services/api/authApi';
+// =========================================
 
 // 🆕 凭证存储
 import {
-  clearCredentials,
-  getSavedCredentials,
-  saveCredentials
+    clearCredentials,
+    getSavedCredentials,
+    saveCredentials
 } from '../utils/credentialStorage';
 
 // 🔧 状态管理 Hooks
 import {
-  useCountdown,
-  useFormValidation
+    useCountdown,
+    useFormValidation
 } from './useLoginMainPage';
 // #endregion
 
@@ -213,7 +214,7 @@ const LoginMainPage: React.FC<LoginMainPageProps> = ({
   }, []);
   
   /**
-   * 发送验证码
+   * 发送验证码 - ✅ 使用真实后端API
    */
   const handleSendCode = useCallback(async () => {
     if (validation.sendCodeDisabled || isCountingDown) return;
@@ -221,16 +222,22 @@ const LoginMainPage: React.FC<LoginMainPageProps> = ({
     try {
       setLoading(prev => ({ ...prev, sendCode: true }));
       
-      // 调用真实API
+      console.log('[LoginMainPage] 📱 发送验证码（连接后端）');
+      console.log(`   手机号: ${formData.phoneNumber}`);
+      
+      // 调用真实后端API
       await backendAuthApi.sendSmsCode({
         mobile: formData.phoneNumber,
         type: 'login',
         clientType: 'app',
       });
       
+      console.log('   ✅ 验证码发送成功（真实后端）');
+      
       Alert.alert('成功', '验证码已发送，请查收短信');
       startCountdown();
     } catch (error: any) {
+      console.error('   ❌ 验证码发送失败:', error);
       Alert.alert('发送失败', error.message || '验证码发送失败，请稍后重试');
     } finally {
       setLoading(prev => ({ ...prev, sendCode: false }));
@@ -349,8 +356,8 @@ const LoginMainPage: React.FC<LoginMainPageProps> = ({
    * 忘记密码
    */
   const handleForgotPassword = useCallback(() => {
-    Alert.alert('忘记密码', '请联系客服或使用验证码登录');
-  }, []);
+    router.push('/auth/forgot-password');
+  }, [router]);
   
   /**
    * 快速注册

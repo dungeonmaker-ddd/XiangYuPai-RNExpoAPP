@@ -16,11 +16,10 @@
 import { create } from 'zustand';
 import type { Post, TabType, UserProfile } from '../src/features/Profile/types';
 
-// API服务
-import { profileApi } from '../services/api/profileApi';
-
-// 数据转换工具
-import { profileDataTransform } from '../src/features/Profile/utils/dataTransform';
+// ========== 🚫 注释掉真实API导入 ==========
+// import { profileApi } from '../services/api/profileApi';
+// import { profileDataTransform } from '../src/features/Profile/utils/dataTransform';
+// =========================================
 
 // 🆕 导入authStore以获取当前用户信息
 import { useAuthStore } from '../src/features/AuthModule/stores/authStore';
@@ -94,6 +93,68 @@ export type ProfileStore = ProfileState & ProfileActions;
 
 // #endregion
 
+// #region Mock Data Generator
+
+/**
+ * 生成模拟动态数据
+ */
+const generateMockPosts = (count: number = 10, isCurrentUser: boolean = true): Post[] => {
+  const posts: Post[] = [];
+  const titles = [
+    '请你们看雪',
+    '今天的日落很美',
+    '分享一下我的日常',
+    '最近爱上了摄影',
+    '周末出游记录',
+    '美食探店',
+    '健身打卡第N天',
+    '读书笔记分享',
+  ];
+  
+  const images = [
+    'https://picsum.photos/400/500?random=',
+    'https://picsum.photos/400/600?random=',
+    'https://picsum.photos/400/450?random=',
+  ];
+  
+  // 🎯 根据是否是当前用户，使用不同的昵称
+  const mockNickname = isCurrentUser ? '我的昵称' : '他人昵称';
+  
+  for (let i = 0; i < count; i++) {
+    posts.push({
+      id: `post_${Date.now()}_${i}`,
+      userId: 'mock_user_001',
+      userInfo: {
+        id: 'mock_user_001',
+        nickname: mockNickname,
+        avatar: `https://picsum.photos/48/48?random=${i}`,
+      },
+      title: titles[i % titles.length],
+      content: isCurrentUser 
+        ? '这是我发布的动态内容，记录生活点滴。' 
+        : '这是他发布的动态内容，分享生活瞬间。',
+      coverImage: `${images[i % images.length]}${i}`,
+      mediaList: [{
+        id: `media_${i}`,
+        type: Math.random() > 0.7 ? 'video' : 'image',
+        url: `${images[i % images.length]}${i}`,
+        width: 400,
+        height: 500 + (i % 3) * 50,
+      }],
+      likeCount: Math.floor(Math.random() * 200) + 10,
+      commentCount: Math.floor(Math.random() * 50),
+      shareCount: Math.floor(Math.random() * 20),
+      isLiked: Math.random() > 0.5,
+      isCollected: Math.random() > 0.7,
+      createdAt: Date.now() - Math.random() * 7 * 24 * 60 * 60 * 1000,
+    });
+  }
+  
+  return posts;
+};
+
+// #endregion
+
 // #region 初始状态
 
 const initialState: ProfileState = {
@@ -127,11 +188,10 @@ export const useProfileStore = create<ProfileStore>((set, get) => ({
   // 初始状态
   ...initialState,
   
-  // 加载用户资料
+  // 加载用户资料（使用假数据）
   loadUserProfile: async (userId?: string) => {
-    // 🔥 第一个日志 - 确保函数被调用
     console.log('\n🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥');
-    console.log('🔥 [PROFILE STORE] loadUserProfile 被调用！');
+    console.log('🔥 [PROFILE STORE] loadUserProfile 被调用（使用假数据）！');
     console.log('🔥 传入参数 userId:', userId || '(未传入)');
     console.log('🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥\n');
     
@@ -139,7 +199,7 @@ export const useProfileStore = create<ProfileStore>((set, get) => ({
       set({ loading: true, error: null });
       
       console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-      console.log('🔄 加载用户资料开始');
+      console.log('🔄 加载用户资料开始（假数据）');
       
       // 🆕 智能用户ID解析
       const authState = useAuthStore.getState();
@@ -150,27 +210,68 @@ export const useProfileStore = create<ProfileStore>((set, get) => ({
       console.log('   最终使用:', targetUserId || 'current-user');
       console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
       
-      // 🎯 使用真实后端API（获取测试账号数据）
-      console.log('🔥 准备调用 API...');
-      const api = profileApi;
+      // ========== 🚫 注释掉真实API调用 ==========
+      // console.log('🔥 准备调用 API...');
+      // const api = profileApi;
+      // 
+      // console.log('🔥 开始执行 API 请求:', targetUserId ? `getUserProfile(${targetUserId})` : 'getCurrentUserProfile()');
+      // 
+      // const profileData = targetUserId 
+      //   ? await api.getUserProfile(Number(targetUserId))
+      //   : await api.getCurrentUserProfile();
+      // 
+      // console.log('🔥 API请求完成！');
+      // console.log('✅ API调用成功，获取到资料数据');
+      // console.log('   昵称:', profileData.nickname);
+      // console.log('   粉丝数:', profileData.stats?.followerCount);
+      // 
+      // // 🔄 转换后端数据为前端格式
+      // const profile = profileDataTransform.transformUserProfileVOToProfile(profileData);
+      // =========================================
       
-      console.log('🔥 开始执行 API 请求:', targetUserId ? `getUserProfile(${targetUserId})` : 'getCurrentUserProfile()');
+      // ========== ✅ 使用假数据 ==========
+      console.log('   模拟网络延迟（800ms）');
+      await new Promise(resolve => setTimeout(resolve, 800));
       
-      const profileData = targetUserId 
-        ? await api.getUserProfile(Number(targetUserId))
-        : await api.getCurrentUserProfile();
+      // 生成模拟用户资料
+      // 🎯 区分个人中心和他人主页的昵称
+      const isCurrentUser = !userId || userId === authState.userInfo?.id;
+      const mockNickname = isCurrentUser 
+        ? (authState.userInfo?.nickname || '我的昵称')  // 个人中心：我的昵称
+        : `他人昵称_${targetUserId?.slice(-4) || '0001'}`;  // 他人主页：他人昵称_XXXX
       
-      console.log('🔥 API请求完成！');
-      console.log('✅ API调用成功，获取到资料数据');
-      console.log('   昵称:', profileData.nickname);
-      console.log('   粉丝数:', profileData.stats?.followerCount);
+      const profile: UserProfile = {
+        id: targetUserId || 'mock_user_001',
+        nickname: mockNickname,
+        avatar: authState.userInfo?.avatar || `https://picsum.photos/96/96?random=${Date.now()}`,
+        backgroundImage: `https://picsum.photos/800/500?random=${Date.now()}`,
+        gender: 'male',
+        age: 25,
+        height: 175, // 身高 cm
+        location: '深圳市',
+        bio: isCurrentUser 
+          ? '这是我的个人简介，展示我的个性和特点。热爱生活，喜欢交友。' 
+          : '这是他的个人简介，展示他的个性和特点。热爱生活，喜欢交友。',
+        skills: ['摄影', '旅游', '美食', '音乐'],
+        followerCount: 1234,
+        followingCount: 567,
+        postCount: 89,
+        likeCount: 4567,
+        isRealVerified: true,
+        isGodVerified: false,
+        isVip: true,
+        isPopular: true,
+        isOnline: true,
+        vipLevel: 3,
+        phone: '13800138000',
+      };
       
-      // 🔄 转换后端数据为前端格式
-      const profile = profileDataTransform.transformUserProfileVOToProfile(profileData);
-      
-      console.log('✅ 数据转换完成');
+      console.log('✅ 假数据生成完成');
+      console.log('   昵称:', profile.nickname);
+      console.log('   粉丝数:', profile.followerCount);
       console.log('   前端ID:', profile.id);
       console.log('   关注数:', profile.followingCount);
+      // =========================================
       
       // 🆕 与authStore数据同步
       if (!userId && authState.userInfo) {
@@ -182,7 +283,7 @@ export const useProfileStore = create<ProfileStore>((set, get) => ({
       set({ currentProfile: profile, loading: false });
       
       console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-      console.log('🎉 用户资料加载完成！');
+      console.log('🎉 用户资料加载完成（假数据）！');
       console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
     } catch (error) {
       console.error('\n❌ 加载用户资料失败:', error);
@@ -250,10 +351,39 @@ export const useProfileStore = create<ProfileStore>((set, get) => ({
     try {
       set({ loading: true, error: null });
       
-      // TODO: 调用内容模块API加载动态
-      console.log('加载动态列表:', tab, page);
+      console.log(`\n📋 加载${tab}列表 - 第${page}页（使用假数据）`);
       
-      set({ loading: false });
+      // ========== ✅ 使用假数据 ==========
+      console.log('   模拟网络延迟（800ms）');
+      await new Promise(resolve => setTimeout(resolve, 800));
+      
+      // 🎯 判断是否是当前用户（用于生成不同的昵称）
+      const { currentProfile } = get();
+      const authState = useAuthStore.getState();
+      const isCurrentUser = !currentProfile?.id || currentProfile.id === authState.userInfo?.id;
+      
+      const mockPosts = generateMockPosts(10, isCurrentUser);
+      const tabKey = tab as 'dynamic' | 'collection' | 'likes';
+      
+      set((state) => ({
+        posts: {
+          ...state.posts,
+          [tabKey]: page === 1 ? mockPosts : [...state.posts[tabKey], ...mockPosts],
+        },
+        page: {
+          ...state.page,
+          [tabKey]: page,
+        },
+        hasMore: {
+          ...state.hasMore,
+          [tabKey]: page < 3, // 模拟3页数据
+        },
+        loading: false,
+      }));
+      
+      console.log(`✅ ${tab}数据加载完成，共${mockPosts.length}条`);
+      console.log(`   昵称类型: ${isCurrentUser ? '我的昵称' : '他人昵称'}`);
+      // =========================================
     } catch (error) {
       set({
         loading: false,
@@ -282,13 +412,20 @@ export const useProfileStore = create<ProfileStore>((set, get) => ({
     set({ refreshing: false });
   },
   
-  // 关注用户
+  // 关注用户（使用假数据）
   followUser: async (targetUserId: number) => {
     try {
-      console.log('🔄 关注用户:', targetUserId);
+      console.log('🔄 关注用户（假数据）:', targetUserId);
       
-      const api = profileApi;
-      await api.followUser(targetUserId);
+      // ========== 🚫 注释掉真实API调用 ==========
+      // const api = profileApi;
+      // await api.followUser(targetUserId);
+      // =========================================
+      
+      // ========== ✅ 使用假数据 ==========
+      console.log('   模拟网络延迟（500ms）');
+      await new Promise(resolve => setTimeout(resolve, 500));
+      // =========================================
       
       // 更新关系状态
       set((state) => ({
@@ -298,20 +435,27 @@ export const useProfileStore = create<ProfileStore>((set, get) => ({
         } : null,
       }));
       
-      console.log('✅ 关注成功');
+      console.log('✅ 关注成功（假数据）');
     } catch (error) {
       console.error('❌ 关注失败:', error);
       throw error;
     }
   },
   
-  // 取消关注
+  // 取消关注（使用假数据）
   unfollowUser: async (targetUserId: number) => {
     try {
-      console.log('🔄 取消关注:', targetUserId);
+      console.log('🔄 取消关注（假数据）:', targetUserId);
       
-      const api = profileApi;
-      await api.unfollowUser(targetUserId);
+      // ========== 🚫 注释掉真实API调用 ==========
+      // const api = profileApi;
+      // await api.unfollowUser(targetUserId);
+      // =========================================
+      
+      // ========== ✅ 使用假数据 ==========
+      console.log('   模拟网络延迟（500ms）');
+      await new Promise(resolve => setTimeout(resolve, 500));
+      // =========================================
       
       // 更新关系状态
       set((state) => ({
@@ -321,7 +465,7 @@ export const useProfileStore = create<ProfileStore>((set, get) => ({
         } : null,
       }));
       
-      console.log('✅ 取消关注成功');
+      console.log('✅ 取消关注成功（假数据）');
     } catch (error) {
       console.error('❌ 取消关注失败:', error);
       throw error;

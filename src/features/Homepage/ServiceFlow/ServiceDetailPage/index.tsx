@@ -17,12 +17,17 @@
 // #endregion
 
 // #region 2. Imports
+import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
     FlatList,
+    Image,
     Platform,
     RefreshControl,
+    SafeAreaView,
+    StatusBar,
     StyleSheet,
     Text,
     TouchableOpacity,
@@ -33,10 +38,14 @@ import {
 import { useConfigStore, useUserStore } from '../../../../../stores';
 
 // 共享组件
-import { Card, ErrorBoundary, LoadingOverlay } from '../../../../components';
+import { ErrorBoundary, LoadingOverlay } from '../../../../components';
+
+// 本地组件
+import type { AdvancedFilters, GenderOption, SortOption } from './components';
+import { AdvancedFilterSheet, GenderBottomSheet, SortBottomSheet } from './components';
 
 // 类型和常量
-import { GAME_SERVICE_TAGS, LIFESTYLE_SERVICE_TAGS, SERVICE_DETAIL_CONSTANTS, SERVICE_DETAIL_ROUTES, SERVICE_THEME_MAP, SERVICE_TYPE_MAP } from './constants';
+import { FUNCTION_ID_TO_SERVICE_TYPE, GAME_SERVICE_TAGS, LIFESTYLE_SERVICE_TAGS, SERVICE_DETAIL_CONSTANTS, SERVICE_DETAIL_ROUTES, SERVICE_THEME_MAP, SERVICE_TYPE_MAP } from './constants';
 import type { FilterState, ServiceCategory, ServiceDetailPageProps, ServiceType } from './types';
 // #endregion
 
@@ -54,6 +63,12 @@ interface ServiceInfo {
   serviceCategory: ServiceCategory;
   serviceConfig: any;
 }
+
+interface BottomSheetState {
+  sortVisible: boolean;
+  genderVisible: boolean;
+  advancedVisible: boolean;
+}
 // #endregion
 
 // #region 4. Constants & Config
@@ -65,7 +80,12 @@ const { COLORS, SIZES, PAGINATION } = SERVICE_DETAIL_CONSTANTS;
  * 获取服务类别
  */
 const getServiceCategory = (serviceType: ServiceType): ServiceCategory => {
-  return SERVICE_TYPE_MAP[serviceType]?.category || 'game';
+  const typeInfo = SERVICE_TYPE_MAP[serviceType];
+  if (!typeInfo) {
+    console.warn(`[ServiceDetailPage] 未找到服务类型: ${serviceType}，使用默认类型 'game'`);
+    return 'game';
+  }
+  return typeInfo.category;
 };
 
 /**
@@ -75,12 +95,26 @@ const getServiceInfo = (serviceType: ServiceType): ServiceInfo => {
   const typeInfo = SERVICE_TYPE_MAP[serviceType];
   const themeInfo = SERVICE_THEME_MAP[serviceType];
   
+  if (!typeInfo) {
+    console.warn(`[ServiceDetailPage] 未找到服务类型配置: ${serviceType}`);
+    // 返回默认配置
+    return {
+      serviceType,
+      serviceName: '未知服务',
+      serviceCategory: 'game',
+      serviceConfig: {
+        theme: themeInfo || { primaryColor: '#6366F1', gradient: ['#6366F1', '#818CF8'] },
+        tags: [],
+      },
+    };
+  }
+  
   return {
     serviceType,
-    serviceName: typeInfo?.name || '未知服务',
-    serviceCategory: typeInfo?.category || 'game',
+    serviceName: typeInfo.name,
+    serviceCategory: typeInfo.category,
     serviceConfig: {
-      theme: themeInfo,
+      theme: themeInfo || { primaryColor: '#6366F1', gradient: ['#6366F1', '#818CF8'] },
       tags: typeInfo.category === 'game' 
         ? GAME_SERVICE_TAGS[serviceType as keyof typeof GAME_SERVICE_TAGS] || []
         : LIFESTYLE_SERVICE_TAGS[serviceType as keyof typeof LIFESTYLE_SERVICE_TAGS] || [],
@@ -225,6 +259,13 @@ const useServiceDetailLogic = (serviceType: ServiceType) => {
     loadComponentConfig,
   } = useServiceDetailState(serviceType);
   
+  // 弹窗状态
+  const [bottomSheetState, setBottomSheetState] = useState<BottomSheetState>({
+    sortVisible: false,
+    genderVisible: false,
+    advancedVisible: false,
+  });
+  
   /**
    * 初始化页面数据
    */
@@ -278,12 +319,19 @@ const useServiceDetailLogic = (serviceType: ServiceType) => {
   }, []);
   
   /**
-   * 点击服务提供者
+   * 点击服务提供者 - 跳转到详情页
    */
-  const handleProviderPress = useCallback((providerId: string) => {
+  const handleProviderPress = useCallback((provider: any) => {
+    // 获取用户的第一个技能作为默认技能
+    const skillId = provider.skills?.[0]?.id || `skill_${provider.id}_${serviceType}`;
+    
     router.push({
-      pathname: SERVICE_DETAIL_ROUTES.USER_DETAIL as any,
-      params: { userId: providerId, serviceType }
+      pathname: `${SERVICE_DETAIL_ROUTES.SKILL_DETAIL}/${skillId}` as any,
+      params: { 
+        skillId: skillId,
+        userId: provider.id,
+        serviceType: serviceType
+      }
     });
   }, [router, serviceType]);
   
@@ -305,12 +353,97 @@ const useServiceDetailLogic = (serviceType: ServiceType) => {
     router.back();
   }, [router]);
   
+  /**
+   * 打开排序弹窗
+   */
+  const handleSortPress = useCallback(() => {
+    setBottomSheetState(prev => ({ ...prev, sortVisible: true }));
+  }, []);
+  
+  /**
+   * 打开性别弹窗
+   */
+  const handleGenderPress = useCallback(() => {
+    setBottomSheetState(prev => ({ ...prev, genderVisible: true }));
+  }, []);
+  
+  /**
+   * 打开高级筛选弹窗
+   */
+  const handleAdvancedFilterPress = useCallback(() => {
+    setBottomSheetState(prev => ({ ...prev, advancedVisible: true }));
+  }, []);
+  
+  /**
+   * 关闭弹窗
+   */
+  const closeBottomSheets = useCallback(() => {
+    setBottomSheetState({
+      sortVisible: false,
+      genderVisible: false,
+      advancedVisible: false,
+    });
+  }, []);
+  
+  /**
+   * 选择排序方式
+   */
+  const handleSortSelect = useCallback((sort: SortOption) => {
+    // 映射 SortOption 到 FilterState 的 sortBy
+    const sortMap: Record<SortOption, FilterState['sortBy']> = {
+      smart: 'smart',
+      latest: 'smart', // 暂时映射到 smart
+      nearest: 'distance',
+      popular: 'rating',
+    };
+    setFilterState(prev => ({ ...prev, sortBy: sortMap[sort] }));
+  }, []);
+  
+  /**
+   * 选择性别
+   */
+  const handleGenderSelect = useCallback((gender: GenderOption) => {
+    setFilterState(prev => ({ ...prev, gender }));
+  }, []);
+  
+  /**
+   * 应用高级筛选
+   */
+  const handleAdvancedFilterApply = useCallback((filters: AdvancedFilters) => {
+    // 将高级筛选转换为 FilterState
+    setFilterState(prev => ({
+      ...prev,
+      advancedFilters: {
+        ...prev.advancedFilters,
+        onlineOnly: filters.status === 'online',
+        features: [...filters.area, ...filters.tags, ...filters.location],
+      },
+    }));
+  }, []);
+  
+  /**
+   * 重置高级筛选
+   */
+  const handleAdvancedFilterReset = useCallback(() => {
+    setFilterState(prev => ({
+      ...prev,
+      advancedFilters: {
+        priceRange: [0, 1000],
+        distanceRange: 10,
+        ratingMin: 0,
+        onlineOnly: false,
+        features: [],
+      },
+    }));
+  }, []);
+  
   return {
     // 状态
     localState,
     serviceInfo,
     filterState,
     filteredProviders,
+    bottomSheetState,
     
     // 方法
     initializePageData,
@@ -319,6 +452,14 @@ const useServiceDetailLogic = (serviceType: ServiceType) => {
     handleProviderPress,
     handleFilterPress,
     handleBack,
+    handleSortPress,
+    handleGenderPress,
+    handleAdvancedFilterPress,
+    closeBottomSheets,
+    handleSortSelect,
+    handleGenderSelect,
+    handleAdvancedFilterApply,
+    handleAdvancedFilterReset,
   };
 };
 // #endregion
@@ -329,20 +470,37 @@ const useServiceDetailLogic = (serviceType: ServiceType) => {
  */
 const ServiceNavigationArea: React.FC<{
   serviceName: string;
+  isLimitedOffer?: boolean;
   onBack: () => void;
   onSearch?: () => void;
-}> = ({ serviceName, onBack, onSearch }) => (
-  <View style={styles.navigationArea}>
+}> = ({ serviceName, isLimitedOffer, onBack, onSearch }) => (
+  <LinearGradient
+    colors={['#FFFFFF', '#F8F9FF']}
+    style={styles.navigationArea}
+  >
     <TouchableOpacity style={styles.backButton} onPress={onBack}>
-      <Text style={styles.backButtonText}>←</Text>
+      <Ionicons name="chevron-back" size={24} color="#333" />
     </TouchableOpacity>
-    <Text style={styles.navigationTitle}>{serviceName}</Text>
+    <View style={styles.navigationTitleContainer}>
+      <Text style={styles.navigationTitle}>{serviceName}</Text>
+      {isLimitedOffer && (
+        <LinearGradient
+          colors={['#FF6B6B', '#FF4757']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={styles.navigationLimitedBadge}
+        >
+          <Ionicons name="flash" size={10} color="#FFF" style={{ marginRight: 2 }} />
+          <Text style={styles.navigationLimitedText}>限时优惠</Text>
+        </LinearGradient>
+      )}
+    </View>
     {onSearch && (
       <TouchableOpacity style={styles.searchButton} onPress={onSearch}>
-        <Text style={styles.searchButtonText}>🔍</Text>
+        <Ionicons name="search" size={20} color="#666" />
       </TouchableOpacity>
     )}
-  </View>
+  </LinearGradient>
 );
 
 /**
@@ -350,41 +508,102 @@ const ServiceNavigationArea: React.FC<{
  */
 const ServiceFilterToolbar: React.FC<{
   filterState: FilterState;
-  onFilterChange: (key: keyof FilterState, value: any) => void;
+  onSortPress: () => void;
+  onGenderPress: () => void;
   onAdvancedFilter: () => void;
-}> = ({ filterState, onFilterChange, onAdvancedFilter }) => (
-  <View style={styles.filterToolbar}>
-    <TouchableOpacity
-      style={[styles.filterButton, filterState.sortBy === 'smart' && styles.filterButtonActive]}
-      onPress={() => onFilterChange('sortBy', 'smart')}
-    >
-      <Text style={styles.filterButtonText}>智能排序</Text>
-    </TouchableOpacity>
-    
-    <TouchableOpacity
-      style={[styles.filterButton, filterState.sortBy === 'price' && styles.filterButtonActive]}
-      onPress={() => onFilterChange('sortBy', 'price')}
-    >
-      <Text style={styles.filterButtonText}>价格</Text>
-    </TouchableOpacity>
-    
-    <TouchableOpacity
-      style={[styles.filterButton, filterState.sortBy === 'rating' && styles.filterButtonActive]}
-      onPress={() => onFilterChange('sortBy', 'rating')}
-    >
-      <Text style={styles.filterButtonText}>评分</Text>
-    </TouchableOpacity>
-    
-    <TouchableOpacity
-      style={[styles.filterButton, filterState.sortBy === 'distance' && styles.filterButtonActive]}
-      onPress={() => onFilterChange('sortBy', 'distance')}
-    >
-      <Text style={styles.filterButtonText}>距离</Text>
-    </TouchableOpacity>
-    
-    <TouchableOpacity style={styles.advancedFilterButton} onPress={onAdvancedFilter}>
-      <Text style={styles.advancedFilterText}>筛选</Text>
-    </TouchableOpacity>
+}> = ({ filterState, onSortPress, onGenderPress, onAdvancedFilter }) => {
+  // 获取排序显示文本
+  const getSortLabel = () => {
+    switch (filterState.sortBy) {
+      case 'smart': return '智能排序';
+      case 'price': return '价格最低';
+      case 'rating': return '人气排序';
+      case 'distance': return '最近排序';
+      default: return '智能排序';
+    }
+  };
+  
+  // 获取性别显示文本
+  const getGenderLabel = () => {
+    switch (filterState.gender) {
+      case 'all': return '不限性别';
+      case 'female': return '只看女生';
+      case 'male': return '只看男生';
+      default: return '不限性别';
+    }
+  };
+  
+  return (
+    <View style={styles.filterToolbar}>
+      <TouchableOpacity
+        style={[styles.filterButton, filterState.sortBy !== 'smart' && styles.filterButtonActive]}
+        onPress={onSortPress}
+      >
+        <Ionicons 
+          name={filterState.sortBy === 'smart' ? 'sparkles-outline' : 'sparkles'} 
+          size={14} 
+          color={filterState.sortBy !== 'smart' ? '#7C3AED' : '#666'} 
+          style={{ marginRight: 4 }}
+        />
+        <Text style={[
+          styles.filterButtonText,
+          filterState.sortBy !== 'smart' && styles.filterButtonTextActive
+        ]}>{getSortLabel()}</Text>
+        <Ionicons name="chevron-down" size={12} color={filterState.sortBy !== 'smart' ? '#7C3AED' : '#666'} style={{ marginLeft: 2 }} />
+      </TouchableOpacity>
+      
+      <TouchableOpacity
+        style={[styles.filterButton, filterState.gender !== 'all' && styles.filterButtonActive]}
+        onPress={onGenderPress}
+      >
+        <Ionicons 
+          name={filterState.gender === 'female' ? 'female' : filterState.gender === 'male' ? 'male' : 'people-outline'} 
+          size={14} 
+          color={filterState.gender !== 'all' ? '#7C3AED' : '#666'} 
+          style={{ marginRight: 4 }}
+        />
+        <Text style={[
+          styles.filterButtonText,
+          filterState.gender !== 'all' && styles.filterButtonTextActive
+        ]}>{getGenderLabel()}</Text>
+        <Ionicons name="chevron-down" size={12} color={filterState.gender !== 'all' ? '#7C3AED' : '#666'} style={{ marginLeft: 2 }} />
+      </TouchableOpacity>
+      
+      <TouchableOpacity
+        style={styles.filterButton}
+        onPress={onAdvancedFilter}
+      >
+        <Ionicons name="options-outline" size={14} color="#666" style={{ marginRight: 4 }} />
+        <Text style={styles.filterButtonText}>筛选</Text>
+        <Ionicons name="chevron-down" size={12} color="#666" style={{ marginLeft: 2 }} />
+      </TouchableOpacity>
+    </View>
+  );
+};
+
+/**
+ * 服务标签栏组件
+ */
+const ServiceTagsBar: React.FC<{
+  tags: Array<{ id: string; name: string }>;
+  selectedTags: string[];
+  onTagPress: (tagId: string) => void;
+}> = ({ tags, selectedTags, onTagPress }) => (
+  <View style={styles.tagsBar}>
+    {tags.map((tag) => {
+      const isSelected = selectedTags.includes(tag.id);
+      return (
+        <TouchableOpacity
+          key={tag.id}
+          style={[styles.tagButton, isSelected && styles.tagButtonActive]}
+          onPress={() => onTagPress(tag.id)}
+        >
+          <Text style={[styles.tagButtonText, isSelected && styles.tagButtonTextActive]}>
+            {tag.name}
+          </Text>
+        </TouchableOpacity>
+      );
+    })}
   </View>
 );
 
@@ -394,78 +613,177 @@ const ServiceFilterToolbar: React.FC<{
 const ProviderCard: React.FC<{
   provider: any;
   serviceCategory: ServiceCategory;
+  isLimitedOffer?: boolean;
   onPress: () => void;
-}> = ({ provider, serviceCategory, onPress }) => (
+}> = ({ provider, serviceCategory, isLimitedOffer, onPress }) => {
+  // 计算限时优惠价格（8折）
+  const originalPrice = provider.price || 10;
+  const discountedPrice = isLimitedOffer ? Math.floor(originalPrice * 0.8) : originalPrice;
+  
+  return (
   <TouchableOpacity style={styles.providerCard} onPress={onPress} activeOpacity={0.9}>
-    <Card style={styles.cardContainer}>
-      <View style={styles.cardHeader}>
-        {/* 头像区域 */}
-        <View style={styles.avatarSection}>
-          <View style={styles.avatarWrapper}>
-            <View style={styles.avatar}>
-              <Text style={styles.avatarPlaceholder}>👤</Text>
+    <View style={styles.cardContainer}>
+      <LinearGradient
+        colors={['#FFFFFF', '#FAFBFF']}
+        style={styles.cardGradient}
+      >
+        <View style={styles.cardContent}>
+          {/* 左侧：头像区域 */}
+          <View style={styles.avatarSection}>
+            <View style={styles.avatarWrapper}>
+              <LinearGradient
+                colors={['#E0E7FF', '#C7D2FE']}
+                style={styles.avatar}
+              >
+                <Image 
+                  source={{ uri: provider.avatar || 'https://picsum.photos/60' }} 
+                  style={styles.avatarImage}
+                />
+              </LinearGradient>
+              {provider.isOnline && (
+                <View style={styles.statusDotWrapper}>
+                  <View style={styles.statusDot} />
+                </View>
+              )}
             </View>
-            <View style={[
-              styles.statusDot,
-              { backgroundColor: provider.isOnline ? COLORS.ONLINE : COLORS.OFFLINE }
-            ]} />
+            {/* HOT标签 */}
+            {provider.isHot && (
+              <LinearGradient
+                colors={['#FF6B6B', '#FF4757']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.hotBadge}
+              >
+                <Ionicons name="flame" size={10} color="#FFF" />
+                <Text style={styles.hotBadgeText}>HOT</Text>
+              </LinearGradient>
+            )}
+          </View>
+        
+        {/* 中间：用户信息区域 */}
+        <View style={styles.userInfoSection}>
+          {/* 用户名和性别标签 */}
+          <View style={styles.nameRow}>
+            <Text style={styles.userName}>{provider.name}</Text>
+            {provider.gender === 'female' && (
+              <LinearGradient
+                colors={['#FFE4E8', '#FFD4DC']}
+                style={styles.genderBadge}
+              >
+                <Ionicons name="female" size={10} color="#FF4D6D" />
+                <Text style={styles.genderBadgeText}>女神</Text>
+              </LinearGradient>
+            )}
+            <View style={styles.distanceContainer}>
+              <Ionicons name="location" size={10} color="#999" />
+              <Text style={styles.distance}>{formatDistance(provider.location.distance || 0)}</Text>
+            </View>
+          </View>
+          
+          {/* 标签区域 */}
+          <View style={styles.tagsSection}>
+            {provider.tags.slice(0, 3).map((tag: string, index: number) => (
+              <LinearGradient
+                key={index}
+                colors={
+                  index === 0 ? ['#E6F7FF', '#D6EFFF'] :
+                  index === 1 ? ['#FFF7E6', '#FFEFD6'] :
+                  ['#F6FFED', '#E8FFD6']
+                }
+                style={styles.tag}
+              >
+                <Text style={styles.tagText}>{tag}</Text>
+              </LinearGradient>
+            ))}
+            {provider.rating && (
+              <View style={styles.ratingTag}>
+                <Ionicons name="star" size={10} color="#FA8C16" />
+                <Text style={styles.ratingText}>{provider.rating.toFixed(1)}</Text>
+              </View>
+            )}
+          </View>
+          
+          {/* 描述区域 */}
+          <Text style={styles.description} numberOfLines={2}>
+            {provider.description || '主打鲜耗位置和能技术不成熟性这里是真的介绍区域这里是真的介绍区域'}
+          </Text>
+          
+          {/* 底部信息：位置和服务信息 */}
+          <View style={styles.bottomInfo}>
+            <Ionicons name="location-outline" size={11} color="#999" />
+            <Text style={styles.locationText}>
+              {provider.location.city || '深圳'} · 荣耀王者 · 创建1-800+
+            </Text>
           </View>
         </View>
         
-        {/* 用户信息区域 */}
-        <View style={styles.userInfo}>
-          <Text style={styles.userName}>{provider.name}</Text>
-          <Text style={styles.userLocation}>
-            📍 {provider.location.city} · {formatDistance(provider.location.distance || 0)}
-          </Text>
-          <Text style={styles.userRating}>
-            ⭐ {formatRating(provider.rating, provider.reviewCount)}
-          </Text>
-        </View>
-        
-        {/* 价格区域 */}
+        {/* 右侧：价格区域 */}
         <View style={styles.priceSection}>
-          <Text style={styles.price}>{formatPrice(provider.price)}</Text>
-          <Text style={styles.priceUnit}>/小时</Text>
+          {isLimitedOffer && (
+            <LinearGradient
+              colors={['#FF6B6B', '#FF4757']}
+              style={styles.limitedOfferBadge}
+            >
+              <Ionicons name="flash" size={10} color="#FFF" />
+            </LinearGradient>
+          )}
+          <LinearGradient
+            colors={['#FFF5F5', '#FFE8E8']}
+            style={styles.priceContainer}
+          >
+            <Text style={styles.price}>{discountedPrice}</Text>
+            {isLimitedOffer && (
+              <Text style={styles.originalPrice}>{originalPrice}</Text>
+            )}
+            <Text style={styles.priceUnit}>金币/局</Text>
+          </LinearGradient>
         </View>
-      </View>
-      
-      {/* 标签区域 */}
-      <View style={styles.tagsSection}>
-        {provider.tags.slice(0, 3).map((tag: string, index: number) => (
-          <View key={index} style={styles.tag}>
-            <Text style={styles.tagText}>{tag}</Text>
-          </View>
-        ))}
-      </View>
-      
-      {/* 描述区域 */}
-      <Text style={styles.description} numberOfLines={2}>
-        {provider.description}
-      </Text>
-    </Card>
+        </View>
+      </LinearGradient>
+    </View>
   </TouchableOpacity>
-);
+  );
+};
 
 /**
  * ServiceDetailPage 主组件
  */
 const ServiceDetailPage: React.FC<ServiceDetailPageProps> = (props) => {
   // 从路由参数获取服务类型（如果是路由调用）
-  const params = useLocalSearchParams<{ serviceType: string }>();
-  const serviceType = (props.serviceType || params.serviceType || 'honor_of_kings') as ServiceType;
+  const params = useLocalSearchParams<{ 
+    serviceType: string; 
+    isLimitedOffer?: string;
+    userId?: string;
+  }>();
+  const rawServiceType = props.serviceType || params.serviceType || 'honor_of_kings';
+  
+  // 转换功能ID到服务类型（如果传入的是功能ID如'1', '2'等）
+  const serviceType = (FUNCTION_ID_TO_SERVICE_TYPE[rawServiceType] || rawServiceType) as ServiceType;
+  
+  // 检查是否为限时优惠
+  const isLimitedOffer = props.isLimitedOffer || params.isLimitedOffer === 'true';
+  const targetUserId = props.userId || params.userId;
   
   const {
     localState,
     serviceInfo,
     filterState,
     filteredProviders,
+    bottomSheetState,
     initializePageData,
     handleRefresh,
     handleFilterChange,
     handleProviderPress,
     handleFilterPress,
     handleBack,
+    handleSortPress,
+    handleGenderPress,
+    handleAdvancedFilterPress,
+    closeBottomSheets,
+    handleSortSelect,
+    handleGenderSelect,
+    handleAdvancedFilterApply,
+    handleAdvancedFilterReset,
   } = useServiceDetailLogic(serviceType);
   
   // 页面初始化
@@ -495,21 +813,43 @@ const ServiceDetailPage: React.FC<ServiceDetailPageProps> = (props) => {
     );
   }
   
+  // 处理标签点击
+  const handleTagPress = useCallback((tagId: string) => {
+    setFilterState(prev => {
+      const selectedTags = prev.selectedTags.includes(tagId)
+        ? prev.selectedTags.filter(id => id !== tagId)
+        : [...prev.selectedTags, tagId];
+      return { ...prev, selectedTags };
+    });
+  }, []);
+  
   return (
     <ErrorBoundary>
-      <View style={styles.container}>
+      <SafeAreaView style={styles.container}>
+        <StatusBar barStyle="dark-content" backgroundColor={COLORS.BACKGROUND} />
         {/* 导航区域 */}
         <ServiceNavigationArea
           serviceName={serviceInfo.serviceName}
+          isLimitedOffer={isLimitedOffer}
           onBack={handleBack}
         />
         
         {/* 筛选工具栏 */}
         <ServiceFilterToolbar
           filterState={filterState}
-          onFilterChange={handleFilterChange}
-          onAdvancedFilter={handleFilterPress}
+          onSortPress={handleSortPress}
+          onGenderPress={handleGenderPress}
+          onAdvancedFilter={handleAdvancedFilterPress}
         />
+        
+        {/* 服务标签栏 */}
+        {serviceInfo.serviceConfig.tags && serviceInfo.serviceConfig.tags.length > 0 && (
+          <ServiceTagsBar
+            tags={serviceInfo.serviceConfig.tags}
+            selectedTags={filterState.selectedTags}
+            onTagPress={handleTagPress}
+          />
+        )}
         
         {/* 服务提供者列表 */}
         <FlatList
@@ -518,7 +858,8 @@ const ServiceDetailPage: React.FC<ServiceDetailPageProps> = (props) => {
             <ProviderCard
               provider={item}
               serviceCategory={serviceInfo.serviceCategory}
-              onPress={() => handleProviderPress(item.id)}
+              isLimitedOffer={isLimitedOffer}
+              onPress={() => handleProviderPress(item)}
             />
           )}
           keyExtractor={(item) => item.id}
@@ -542,7 +883,44 @@ const ServiceDetailPage: React.FC<ServiceDetailPageProps> = (props) => {
           maxToRenderPerBatch={10}
           windowSize={10}
         />
-      </View>
+        
+        {/* 排序弹窗 */}
+        <SortBottomSheet
+          visible={bottomSheetState.sortVisible}
+          selectedSort={
+            filterState.sortBy === 'smart' ? 'smart' :
+            filterState.sortBy === 'distance' ? 'nearest' :
+            filterState.sortBy === 'rating' ? 'popular' : 'smart'
+          }
+          onSelect={handleSortSelect}
+          onClose={closeBottomSheets}
+        />
+        
+        {/* 性别筛选弹窗 */}
+        <GenderBottomSheet
+          visible={bottomSheetState.genderVisible}
+          selectedGender={filterState.gender}
+          onSelect={handleGenderSelect}
+          onClose={closeBottomSheets}
+        />
+        
+        {/* 高级筛选弹窗 */}
+        <AdvancedFilterSheet
+          visible={bottomSheetState.advancedVisible}
+          filters={{
+            status: filterState.advancedFilters.onlineOnly ? 'online' : 'all',
+            area: [],
+            rank: [],
+            priceRange: [],
+            position: [],
+            tags: filterState.selectedTags,
+            location: [],
+          }}
+          onApply={handleAdvancedFilterApply}
+          onReset={handleAdvancedFilterReset}
+          onClose={closeBottomSheets}
+        />
+      </SafeAreaView>
     </ErrorBoundary>
   );
 };
@@ -561,32 +939,60 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    backgroundColor: COLORS.BACKGROUND,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.BORDER,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 3,
   },
   backButton: {
     width: 40,
     height: 40,
     justifyContent: 'center',
     alignItems: 'center',
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.8)',
   },
   backButtonText: {
     fontSize: 24,
     color: COLORS.TEXT,
   },
-  navigationTitle: {
+  navigationTitleContainer: {
     flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  navigationTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: COLORS.TEXT,
-    textAlign: 'center',
+    color: '#333',
+  },
+  navigationLimitedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    shadowColor: '#FF4757',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  navigationLimitedText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#FFFFFF',
   },
   searchButton: {
     width: 40,
     height: 40,
     justifyContent: 'center',
     alignItems: 'center',
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.8)',
   },
   searchButtonText: {
     fontSize: 20,
@@ -600,32 +1006,71 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     backgroundColor: COLORS.BACKGROUND,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.BORDER,
+    borderBottomColor: '#F0F0F0',
   },
   filterButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    backgroundColor: COLORS.SURFACE,
-    marginRight: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: '#F5F5F5',
+    marginRight: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
   },
   filterButtonActive: {
-    backgroundColor: COLORS.PRIMARY,
+    backgroundColor: '#F0E6FF',
+    shadowColor: '#7C3AED',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 2,
   },
   filterButtonText: {
-    fontSize: 14,
-    color: COLORS.TEXT,
+    fontSize: 13,
+    color: '#666',
+    fontWeight: '500',
   },
-  advancedFilterButton: {
-    marginLeft: 'auto',
+  filterButtonTextActive: {
+    color: '#7C3AED',
+    fontWeight: '600',
+  },
+  
+  // 服务标签栏样式
+  tagsBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    backgroundColor: COLORS.BACKGROUND,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.BORDER,
+  },
+  tagButton: {
     paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    backgroundColor: COLORS.SURFACE,
+    paddingVertical: 5,
+    borderRadius: 4,
+    backgroundColor: COLORS.BACKGROUND,
+    marginRight: 8,
+    borderWidth: 1,
+    borderColor: COLORS.BORDER,
   },
-  advancedFilterText: {
-    fontSize: 14,
+  tagButtonActive: {
+    backgroundColor: '#F0E6FF',
+    borderColor: '#7C3AED',
+  },
+  tagButtonText: {
+    fontSize: 12,
     color: COLORS.TEXT,
+    fontWeight: '400',
+  },
+  tagButtonTextActive: {
+    color: '#7C3AED',
+    fontWeight: '500',
   },
   
   // 列表样式
@@ -640,123 +1085,267 @@ const styles = StyleSheet.create({
   // 提供者卡片样式
   providerCard: {
     marginBottom: SIZES.CARD_SPACING,
+    marginTop: 4,
   },
   cardContainer: {
-    padding: SIZES.CARD_PADDING,
+    borderRadius: 16,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 5,
+    backgroundColor: '#FFF',
   },
-  cardHeader: {
+  cardGradient: {
+    padding: 14,
+  },
+  cardContent: {
     flexDirection: 'row',
-    marginBottom: 12,
   },
   
   // 头像样式
   avatarSection: {
     marginRight: 12,
+    alignItems: 'center',
   },
   avatarWrapper: {
     position: 'relative',
+    width: 64,
+    height: 64,
   },
   avatar: {
-    width: SIZES.AVATAR_SIZE,
-    height: SIZES.AVATAR_SIZE,
-    borderRadius: SIZES.AVATAR_SIZE / 2,
-    backgroundColor: COLORS.SURFACE,
+    width: 64,
+    height: 64,
+    borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
+    overflow: 'hidden',
+    shadowColor: '#7C3AED',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  avatarImage: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 12,
   },
   avatarPlaceholder: {
-    fontSize: 24,
+    fontSize: 28,
   },
-  statusDot: {
+  statusDotWrapper: {
     position: 'absolute',
     bottom: 2,
     right: 2,
-    width: SIZES.STATUS_DOT_SIZE,
-    height: SIZES.STATUS_DOT_SIZE,
-    borderRadius: SIZES.STATUS_DOT_SIZE / 2,
-    borderWidth: 2,
-    borderColor: COLORS.BACKGROUND,
+    backgroundColor: '#FFF',
+    borderRadius: 8,
+    padding: 2,
+  },
+  statusDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#52C41A',
+  },
+  hotBadge: {
+    marginTop: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+    shadowColor: '#FF4757',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  hotBadgeText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    marginLeft: 2,
   },
   
   // 用户信息样式
-  userInfo: {
+  userInfoSection: {
     flex: 1,
-    justifyContent: 'space-between',
+    marginRight: 8,
+  },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 6,
   },
   userName: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '600',
     color: COLORS.TEXT,
+    marginRight: 6,
   },
-  userLocation: {
-    fontSize: 12,
-    color: COLORS.TEXT_LIGHT,
+  genderBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+    marginRight: 6,
   },
-  userRating: {
-    fontSize: 12,
-    color: COLORS.TEXT_SECONDARY,
+  genderBadgeText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#FF4D6D',
+    marginLeft: 2,
+  },
+  distanceContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginLeft: 'auto',
+  },
+  distance: {
+    fontSize: 11,
+    color: '#999',
+    marginLeft: 2,
   },
   
   // 价格样式
   priceSection: {
-    alignItems: 'flex-end',
+    alignItems: 'center',
     justifyContent: 'center',
+    minWidth: 60,
+    position: 'relative',
+  },
+  limitedOfferBadge: {
+    position: 'absolute',
+    top: -6,
+    right: -6,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 1,
+    shadowColor: '#FF4757',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.4,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  limitedOfferText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  priceContainer: {
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
   },
   price: {
-    fontSize: 18,
+    fontSize: 22,
     fontWeight: '700',
-    color: COLORS.PRIMARY,
+    color: '#FF4D4F',
+  },
+  originalPrice: {
+    fontSize: 12,
+    fontWeight: '400',
+    color: '#999',
+    textDecorationLine: 'line-through',
+    marginTop: 2,
   },
   priceUnit: {
-    fontSize: 12,
-    color: COLORS.TEXT_SECONDARY,
+    fontSize: 10,
+    color: '#666',
+    marginTop: 2,
   },
   
   // 标签样式
   tagsSection: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    marginBottom: 8,
+    marginBottom: 6,
+    alignItems: 'center',
   },
   tag: {
-    backgroundColor: COLORS.PRIMARY,
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 10,
-    marginRight: 6,
-    marginBottom: 4,
+    marginRight: 4,
+    marginBottom: 3,
+  },
+  tagPrimary: {
+    backgroundColor: '#E6F7FF',
+  },
+  tagSecondary: {
+    backgroundColor: '#FFF7E6',
+  },
+  tagTertiary: {
+    backgroundColor: '#F6FFED',
   },
   tagText: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '500',
-    color: COLORS.BACKGROUND,
+    color: '#333',
+  },
+  ratingTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFF7E6',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+    marginRight: 4,
+  },
+  ratingText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#FA8C16',
+    marginLeft: 2,
   },
   
   // 描述样式
   description: {
-    fontSize: 13,
+    fontSize: 12,
     color: COLORS.TEXT_SECONDARY,
-    lineHeight: 18,
+    lineHeight: 17,
+    marginBottom: 6,
+  },
+  
+  // 底部信息样式
+  bottomInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  locationText: {
+    fontSize: 11,
+    color: '#999',
+    marginLeft: 2,
   },
   
   // 空状态样式
   emptyState: {
-    paddingTop: 100,
+    paddingTop: 120,
+    paddingHorizontal: 40,
     alignItems: 'center',
   },
   emptyIcon: {
-    fontSize: 64,
-    marginBottom: 16,
+    fontSize: 72,
+    marginBottom: 20,
+    opacity: 0.6,
   },
   emptyTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: COLORS.TEXT,
+    color: '#333',
     marginBottom: 8,
   },
   emptySubtitle: {
     fontSize: 14,
-    color: COLORS.TEXT_SECONDARY,
+    color: '#999',
+    textAlign: 'center',
   },
   
   // 错误状态样式
@@ -764,24 +1353,30 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 20,
+    padding: 40,
   },
   errorText: {
     fontSize: 16,
     color: '#EF4444',
-    marginBottom: 20,
+    marginBottom: 24,
     textAlign: 'center',
+    lineHeight: 24,
   },
   retryButton: {
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    backgroundColor: COLORS.PRIMARY,
-    borderRadius: 8,
+    paddingHorizontal: 32,
+    paddingVertical: 14,
+    backgroundColor: '#7C3AED',
+    borderRadius: 24,
+    shadowColor: '#7C3AED',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 5,
   },
   retryButtonText: {
     fontSize: 16,
     fontWeight: '600',
-    color: COLORS.BACKGROUND,
+    color: '#FFFFFF',
   },
 });
 

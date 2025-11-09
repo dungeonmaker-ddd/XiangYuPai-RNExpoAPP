@@ -10,10 +10,11 @@
  */
 
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
     ActivityIndicator,
     Alert,
+    Dimensions,
     Image,
     Platform,
     ScrollView,
@@ -24,7 +25,9 @@ import {
     View,
 } from 'react-native';
 
-import type { CommentItem, Feed } from '../types';
+import type { Comment, Feed } from '../types';
+import ReportModal from './ReportModal';
+import ShareModal from './ShareModal';
 
 // 颜色常量
 const COLORS = {
@@ -39,17 +42,27 @@ const COLORS = {
   DIVIDER: '#F0F0F0',
 } as const;
 
-export default function DetailPage() {
+interface DetailPageProps {
+  feedId?: string;
+}
+
+export default function DetailPage({ feedId: propFeedId }: DetailPageProps = {}) {
   const router = useRouter();
   const params = useLocalSearchParams();
-  const feedId = params.id as string;
+  const feedId = propFeedId || (params.feedId as string) || (params.id as string);
 
   // 状态
   const [loading, setLoading] = useState(true);
   const [feed, setFeed] = useState<Feed | null>(null);
-  const [comments, setComments] = useState<CommentItem[]>([]);
+  const [comments, setComments] = useState<Comment[]>([]);
   const [commentText, setCommentText] = useState('');
   const [isCommenting, setIsCommenting] = useState(false);
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [showReportModal, setShowReportModal] = useState(false);
+  
+  // Refs
+  const imageScrollRef = useRef<ScrollView>(null);
 
   // 加载详情
   useEffect(() => {
@@ -65,6 +78,8 @@ export default function DetailPage() {
       // 模拟数据
       setFeed({
         id: feedId,
+        type: 1, // 动态类型
+        typeDesc: '动态',
         title: '探店分享：这家咖啡店太绝了！',
         content: '今天打卡了市中心这家新开的咖啡店，环境超棒！咖啡味道也很正宗，特别推荐他们家的手冲咖啡。店里的装修走的是简约北欧风，非常适合拍照。服务员小姐姐也很热情，还送了小饼干。价格也很亲民，人均30-40就能喝到很不错的咖啡。强烈推荐给喜欢喝咖啡的朋友们！',
         userId: '1',
@@ -77,21 +92,42 @@ export default function DetailPage() {
         },
         mediaList: [
           {
+            id: '1',
             type: 'image',
             url: 'https://picsum.photos/400/300?random=1',
             thumbnailUrl: 'https://picsum.photos/200/150?random=1',
+            width: 400,
+            height: 300,
           },
           {
+            id: '2',
             type: 'image',
             url: 'https://picsum.photos/400/300?random=2',
             thumbnailUrl: 'https://picsum.photos/200/150?random=2',
+            width: 400,
+            height: 300,
           },
         ],
         topicList: [
-          { name: '探店分享', id: '1' },
-          { name: '咖啡', id: '2' },
+          { 
+            name: '探店分享', 
+            participantCount: 1250,
+            postCount: 3200,
+            hotIndex: 85,
+            trendChange: 12,
+            createdAt: Date.now() - 7 * 24 * 60 * 60 * 1000,
+          },
+          { 
+            name: '咖啡', 
+            participantCount: 980,
+            postCount: 2500,
+            hotIndex: 78,
+            trendChange: 5,
+            createdAt: Date.now() - 14 * 24 * 60 * 60 * 1000,
+          },
         ],
-        location: '深圳市南山区',
+        locationName: '深圳市南山区',
+        locationAddress: '深圳市南山区科技园',
         likeCount: 128,
         commentCount: 45,
         collectCount: 32,
@@ -106,25 +142,39 @@ export default function DetailPage() {
       setComments([
         {
           id: '1',
+          feedId: feedId,
           userId: '2',
-          userName: '小明',
-          userAvatar: 'https://i.pravatar.cc/150?u=user2',
+          userInfo: {
+            id: '2',
+            nickname: '小明',
+            avatar: 'https://i.pravatar.cc/150?u=user2',
+            isFollowed: false,
+          },
           content: '看起来不错哦，周末去试试！',
           likeCount: 12,
           isLiked: false,
           createdAt: Date.now() - 1 * 60 * 60 * 1000,
           replyCount: 2,
+          isTop: false,
+          replies: [],
         },
         {
           id: '2',
+          feedId: feedId,
           userId: '3',
-          userName: '小红',
-          userAvatar: 'https://i.pravatar.cc/150?u=user3',
+          userInfo: {
+            id: '3',
+            nickname: '小红',
+            avatar: 'https://i.pravatar.cc/150?u=user3',
+            isFollowed: false,
+          },
           content: '地址在哪里啊？',
           likeCount: 5,
           isLiked: false,
           createdAt: Date.now() - 30 * 60 * 1000,
           replyCount: 0,
+          isTop: false,
+          replies: [],
         },
       ]);
     } catch (error) {
@@ -168,7 +218,7 @@ export default function DetailPage() {
 
   // 分享
   const handleShare = () => {
-    Alert.alert('分享', '分享功能开发中...');
+    setShowShareModal(true);
   };
 
   // 关注用户
@@ -198,16 +248,23 @@ export default function DetailPage() {
       // TODO: 调用评论API
       await new Promise(resolve => setTimeout(resolve, 500));
       
-      const newComment: CommentItem = {
+      const newComment: Comment = {
         id: String(Date.now()),
+        feedId: feedId,
         userId: 'current_user',
-        userName: '我',
-        userAvatar: 'https://i.pravatar.cc/150?u=current',
+        userInfo: {
+          id: 'current_user',
+          nickname: '我',
+          avatar: 'https://i.pravatar.cc/150?u=current',
+          isFollowed: false,
+        },
         content: commentText,
         likeCount: 0,
         isLiked: false,
         createdAt: Date.now(),
         replyCount: 0,
+        isTop: false,
+        replies: [],
       };
       
       setComments([newComment, ...comments]);
@@ -275,6 +332,44 @@ export default function DetailPage() {
     return num.toString();
   };
 
+  // 处理图片滚动
+  const handleImageScroll = (event: any) => {
+    const screenWidth = Dimensions.get('window').width;
+    const contentOffsetX = event.nativeEvent.contentOffset.x;
+    const index = Math.round(contentOffsetX / screenWidth);
+    setCurrentImageIndex(index);
+  };
+
+  // 跳转到用户主页
+  const handleUserPress = () => {
+    if (!feed) return;
+    
+    console.log('[DetailPage] 🧭 导航: 动态详情 → 用户主页', { userId: feed.userId });
+    router.push({
+      pathname: '/profile/[userId]',
+      params: { userId: feed.userId },
+    });
+  };
+
+  // 跳转到评论用户主页
+  const handleCommentUserPress = (userId: string) => {
+    console.log('[DetailPage] 🧭 导航: 动态详情 → 评论用户主页', { userId });
+    router.push({
+      pathname: '/profile/[userId]',
+      params: { userId },
+    });
+  };
+
+  // 跳转到话题页
+  const handleTopicPress = (topicName: string) => {
+    console.log('[DetailPage] 🧭 导航: 动态详情 → 话题页', { topicName });
+    // 使用话题名称作为ID（实际应该使用话题ID）
+    router.push({
+      pathname: '/topic/[topicId]',
+      params: { topicId: topicName },
+    });
+  };
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -305,15 +400,52 @@ export default function DetailPage() {
           <Text style={styles.backButtonText}>←</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>动态详情</Text>
-        <TouchableOpacity style={styles.moreButton}>
+        <TouchableOpacity 
+          style={styles.moreButton}
+          onPress={() => setShowShareModal(true)}
+        >
           <Text style={styles.moreButtonText}>⋯</Text>
         </TouchableOpacity>
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        {/* 图片轮播 - 在滚动内容中 */}
+        {feed.mediaList.length > 0 && (
+          <View style={styles.imageCarouselContainer}>
+            <ScrollView
+              ref={imageScrollRef}
+              horizontal
+              pagingEnabled
+              showsHorizontalScrollIndicator={false}
+              onScroll={handleImageScroll}
+              scrollEventThrottle={16}
+              style={styles.imageCarousel}
+            >
+              {feed.mediaList.map((media, index) => (
+                <Image
+                  key={index}
+                  source={{ uri: media.url }}
+                  style={styles.carouselImage}
+                  resizeMode="cover"
+                />
+              ))}
+            </ScrollView>
+            
+            {/* 图片指示器 */}
+            {feed.mediaList.length > 1 && (
+              <View style={styles.imageIndicatorContainer}>
+                <View style={styles.imageIndicator}>
+                  <Text style={styles.imageIndicatorText}>
+                    {currentImageIndex + 1}/{feed.mediaList.length}
+                  </Text>
+                </View>
+              </View>
+            )}
+          </View>
+        )}
         {/* 用户信息 */}
         <View style={styles.userSection}>
-          <TouchableOpacity style={styles.userInfo}>
+          <TouchableOpacity style={styles.userInfo} onPress={handleUserPress}>
             <Image source={{ uri: feed.userInfo.avatar }} style={styles.avatar} />
             <View style={styles.userTextInfo}>
               <Text style={styles.nickname}>{feed.userInfo.nickname}</Text>
@@ -348,32 +480,24 @@ export default function DetailPage() {
         {feed.topicList.length > 0 && (
           <View style={styles.topicList}>
             {feed.topicList.map((topic, index) => (
-              <TouchableOpacity key={index} style={styles.topicTag}>
+              <TouchableOpacity 
+                key={index} 
+                style={styles.topicTag}
+                onPress={() => handleTopicPress(topic.name)}
+              >
                 <Text style={styles.topicText}>#{topic.name}</Text>
               </TouchableOpacity>
             ))}
           </View>
         )}
 
-        {/* 图片 */}
-        {feed.mediaList.length > 0 && (
-          <View style={styles.imageList}>
-            {feed.mediaList.map((media, index) => (
-              <Image
-                key={index}
-                source={{ uri: media.url }}
-                style={styles.feedImage}
-                resizeMode="cover"
-              />
-            ))}
-          </View>
-        )}
-
         {/* 地点 */}
-        {feed.location && (
+        {(feed.locationName || feed.location) && (
           <TouchableOpacity style={styles.locationTag}>
             <Text style={styles.locationIcon}>📍</Text>
-            <Text style={styles.locationText}>{feed.location}</Text>
+            <Text style={styles.locationText}>
+              {feed.locationName || (typeof feed.location === 'string' ? feed.location : feed.location?.name)}
+            </Text>
           </TouchableOpacity>
         )}
 
@@ -396,9 +520,13 @@ export default function DetailPage() {
         {/* 评论列表 */}
         {comments.map((comment) => (
           <View key={comment.id} style={styles.commentItem}>
-            <Image source={{ uri: comment.userAvatar }} style={styles.commentAvatar} />
+            <TouchableOpacity onPress={() => handleCommentUserPress(comment.userId)}>
+              <Image source={{ uri: comment.userInfo.avatar }} style={styles.commentAvatar} />
+            </TouchableOpacity>
             <View style={styles.commentContent}>
-              <Text style={styles.commentUserName}>{comment.userName}</Text>
+              <TouchableOpacity onPress={() => handleCommentUserPress(comment.userId)}>
+                <Text style={styles.commentUserName}>{comment.userInfo.nickname}</Text>
+              </TouchableOpacity>
               <Text style={styles.commentText}>{comment.content}</Text>
               <View style={styles.commentFooter}>
                 <Text style={styles.commentTime}>{formatTime(comment.createdAt)}</Text>
@@ -469,6 +597,24 @@ export default function DetailPage() {
           </TouchableOpacity>
         </View>
       </View>
+
+      {/* 分享弹窗 */}
+      <ShareModal
+        visible={showShareModal}
+        onClose={() => setShowShareModal(false)}
+        feedId={feedId}
+        feedTitle={feed?.title}
+        feedContent={feed?.content}
+        onReport={() => setShowReportModal(true)}
+      />
+
+      {/* 举报弹窗 */}
+      <ReportModal
+        visible={showReportModal}
+        onClose={() => setShowReportModal(false)}
+        feedId={feedId}
+        feedTitle={feed?.title}
+      />
     </View>
   );
 }
@@ -488,6 +634,37 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.CARD_BACKGROUND,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.BORDER,
+  },
+  // 图片轮播样式
+  imageCarouselContainer: {
+    position: 'relative',
+    width: '100%',
+    height: Dimensions.get('window').width * 0.88, // 缩小到原来的2/3
+    backgroundColor: '#000',
+  },
+  imageCarousel: {
+    width: '100%',
+    height: '100%',
+  },
+  carouselImage: {
+    width: Dimensions.get('window').width,
+    height: Dimensions.get('window').width * 0.88,
+  },
+  imageIndicatorContainer: {
+    position: 'absolute',
+    bottom: 16,
+    right: 16,
+  },
+  imageIndicator: {
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
+  imageIndicatorText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '600',
   },
   backButton: {
     padding: 4,
@@ -624,18 +801,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: COLORS.PRIMARY,
     fontWeight: '500',
-  },
-  imageList: {
-    paddingHorizontal: 16,
-    paddingBottom: 16,
-    backgroundColor: COLORS.CARD_BACKGROUND,
-  },
-  feedImage: {
-    width: '100%',
-    aspectRatio: 4 / 3,
-    borderRadius: 8,
-    backgroundColor: COLORS.BORDER,
-    marginBottom: 8,
   },
   locationTag: {
     flexDirection: 'row',

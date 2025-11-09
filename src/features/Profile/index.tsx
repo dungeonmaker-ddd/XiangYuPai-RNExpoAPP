@@ -90,10 +90,14 @@ export type { ProfileProps } from './types';
 // 导出子页面
 export { default as CollectionPage } from './CollectionPage';
 export { default as DynamicPage } from './DynamicPage';
+export { default as FollowListPage } from './FollowListPage';
 export { default as LikesPage } from './LikesPage';
 export { default as MainPage } from './MainPage';
+export { default as MyPage } from './MyPage';
+export { default as PersonalCenterPage } from './PersonalCenterPage';
 export { default as PostDetailPage } from './PostDetailPage';
 export { default as ProfileEditPage } from './ProfileEditPage';
+export { default as SkillsEditPage } from './ProfileEditPage/SkillsEditPage';
 export { default as ProfileInfoPage } from './ProfileInfoPage';
 // #endregion
 

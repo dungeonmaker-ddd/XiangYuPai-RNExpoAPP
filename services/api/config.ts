@@ -3,13 +3,56 @@
  * 统一管理API基础配置、环境变量、请求配置等
  */
 
+import Constants from 'expo-constants';
 import { Platform } from 'react-native';
+
+/**
+ * 🔍 检测是否是Android模拟器
+ * 
+ * 检测方法：
+ * 1. 检查设备品牌/型号是否包含模拟器特征
+ * 2. 检查是否在开发环境
+ * 
+ * @returns true=模拟器, false=真机
+ */
+const isAndroidEmulator = (): boolean => {
+  if (Platform.OS !== 'android') return false;
+  
+  const { deviceName, isDevice } = Constants;
+  
+  // Expo Constants提供的isDevice属性（false表示模拟器）
+  if (isDevice === false) {
+    console.log('[API Config] 🔍 检测到Android模拟器（通过isDevice）');
+    return true;
+  }
+  
+  // 通过设备名称检测（常见的模拟器名称特征）
+  const emulatorPatterns = [
+    /emulator/i,
+    /android sdk/i,
+    /sdk_gphone/i,
+    /generic/i,
+    /unknown/i,
+  ];
+  
+  const deviceNameLower = (deviceName || '').toLowerCase();
+  const isEmulatorByName = emulatorPatterns.some(pattern => pattern.test(deviceNameLower));
+  
+  if (isEmulatorByName) {
+    console.log('[API Config] 🔍 检测到Android模拟器（通过设备名称）:', deviceName);
+    return true;
+  }
+  
+  console.log('[API Config] 📱 检测到Android真机:', deviceName);
+  return false;
+};
 
 /**
  * 🤖 自动检测环境并返回正确的API地址
  * 
  * 关键：Android模拟器访问主机需要使用特殊IP
- * - Android Studio模拟器: 10.0.2.2
+ * - Android Studio模拟器: 10.0.2.2 (自动检测)
+ * - Android真机: 主机局域网IP (自动检测)
  * - iOS模拟器: localhost
  * - 真实设备: 主机局域网IP
  */
@@ -22,10 +65,14 @@ const getDevApiUrl = (): string => {
   
   // 根据平台自动选择
   if (Platform.OS === 'android') {
-    // 🔧 使用主机实际IP（10.0.2.2映射不稳定）
-    console.log('[API Config] 🤖 检测到Android环境，使用主机实际IP: 192.168.1.108:8080');
-    // return 'http://192.168.1.108:8080';
-    return 'http://10.0.2.2:8080';  // ❌ 映射不稳定，已禁用
+    // 🤖 自动检测Android模拟器 vs 真机
+    if (isAndroidEmulator()) {
+      console.log('[API Config] 🤖 Android模拟器 → 使用 10.0.2.2:8080');
+      return 'http://10.0.2.2:8080';
+    } else {
+      console.log('[API Config] 📱 Android真机 → 使用主机IP: 192.168.1.108:8080');
+      return 'http://192.168.1.108:8080';
+    }
   } else if (Platform.OS === 'ios') {
     // iOS模拟器可以直接使用localhost
     console.log('[API Config] 🍎 检测到iOS环境，使用 localhost:8080');
